@@ -4,7 +4,7 @@ import { useWS } from '../lib/ctx'
 import { childrenOf, download, rootByRole, safeName, wordsOf, fmt } from '../lib/util'
 import { compileDocx, compileHtml, compileText, type CompileItem, type CompileOptions } from '../lib/docx'
 import { FONTS } from './Editor'
-import { isConnected, uploadBlob } from '../lib/sync'
+import { ensureSession, uploadBlob } from '../lib/sync'
 import { Modal, toast } from './ui'
 
 type Format = 'docx' | 'pdf' | 'md' | 'txt'
@@ -58,7 +58,7 @@ export default function Compile({ onClose }: { onClose: () => void }) {
       }
       else { const md = fmtSel === 'md'; blob = new Blob([compileText(items, o, md)], { type: 'text/plain;charset=utf-8' }); name = base + (md ? '.md' : '.txt'); mime = 'text/plain' }
       if (toDrive) {
-        if (!isConnected()) { toast('Conecte o Google Drive primeiro (botão de sincronizar)', 'err'); return }
+        if (!(await ensureSession())) { toast('Conecte o Google Drive primeiro (botão de sincronizar)', 'err'); return }
         await uploadBlob(name, blob, mime); toast(`“${name}” enviado para a pasta Tinteiro no Drive`)
       } else download(name, blob)
       await db.projects.update(project.id, { updatedAt: now() })

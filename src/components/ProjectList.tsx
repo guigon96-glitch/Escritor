@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { blankNode, createProject, db } from '../lib/db'
-import { connectDrive, downloadRemote, importAsCopy, isConnected, listRemoteProjects, mergeBundle, type Bundle, type RemoteProject } from '../lib/sync'
+import { connectDrive, downloadRemote, importAsCopy, ensureSession, listRemoteProjects, mergeBundle, type Bundle, type RemoteProject } from '../lib/sync'
 import { importDocx, splitByHeadings } from '../lib/docx'
 import { fmtDate, pickFile, rootByRole } from '../lib/util'
 import { Confirm, LazyInput, Modal, toast } from './ui'
@@ -63,7 +63,7 @@ export default function ProjectList({ onOpen }: { onOpen: (id: string) => void }
   const loadDrive = async () => {
     setBusy(true)
     try {
-      if (!isConnected()) await connectDrive()
+      if (!(await ensureSession())) await connectDrive()
       setRemote(await listRemoteProjects())
     } catch (e: any) {
       if (String(e.message).includes('Client ID')) setSetup(true)

@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { blankNode, db, now, today, touchProject, type BNode } from '../lib/db'
 import { WSContext, type FolderView, type Tool, type WS } from '../lib/ctx'
 import { manuscriptWords, roleOf, rootByRole } from '../lib/util'
-import { connectDrive, isConnected, syncProject } from '../lib/sync'
+import { connectDrive, ensureSession, syncProject } from '../lib/sync'
 import Binder from './Binder'
 import MainView from './MainView'
 import Inspector from './Inspector'
@@ -66,7 +66,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
     const enabled = (await db.kv.get('driveEnabled'))?.value
     if (!enabled && !interactive) { setSync('off'); return }
     try {
-      if (!isConnected()) {
+      if (!(await ensureSession())) {
         if (!interactive) { setSync('login'); return }
         await connectDrive()
       }
@@ -82,11 +82,13 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   }, [projectId])
 
   useEffect(() => {
-    db.kv.get('driveEnabled').then(kv => setSync(kv?.value ? (isConnected() ? 'idle' : 'login') : 'off'))
-    const iv = setInterval(() => { if (dirty.current && isConnected()) doSync(false) }, 90_000)
-    const vis = () => { if (document.visibilityState === 'hidden' && dirty.current && isConnected()) doSync(false) }
+    db.kv.get('driveEnabled').then(async kv => {
+      if (!kv?.value) { setSync('off'); return }
+      if (await ensureSession()) doSync(false); else setSync('login')
+    })
+    const iv = setInterval(() => { if (dirty.current) doSync(false) }, 90_000)
+    const vis = () => { if (document.visibilityState === 'hidden' && dirty.current) doSync(false) }
     document.addEventListener('visibilitychange', vis)
-    if (isConnected()) doSync(false)
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', vis) }
   }, [doSync])
 

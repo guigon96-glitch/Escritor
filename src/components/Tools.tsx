@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { db, now, type Label } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { NAME_STYLES, generateName } from '../lib/names'
-import { exportBundle, fetchBundle, importAsCopy, isConnected, listBackups } from '../lib/sync'
+import { exportBundle, fetchBundle, importAsCopy, ensureSession, listBackups } from '../lib/sync'
 import { download, fmtDate, safeName, rootByRole } from '../lib/util'
 import Timeline from './Timeline'
 import RelationMap from './RelationMap'
@@ -71,7 +71,7 @@ function Settings({ onClose }: { onClose: () => void }) {
     download(`${safeName(project.title)} — backup ${new Date().toISOString().slice(0, 10)}.tinteiro.json`, new Blob([JSON.stringify(b)], { type: 'application/json' }))
   }
   const loadBackups = async () => {
-    if (!isConnected()) { toast('Conecte ao Google Drive primeiro', 'err'); return }
+    if (!(await ensureSession())) { toast('Conecte ao Google Drive primeiro', 'err'); return }
     try { setBackups(await listBackups(project.id)) } catch (e: any) { toast(e.message, 'err') }
   }
 

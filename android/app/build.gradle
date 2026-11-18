@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Endereço onde o Tinteiro está publicado (GitHub Pages).
+def appHost = 'guigon96-glitch.github.io'
+def appUrl = 'https://guigon96-glitch.github.io/Escritor/'
+
+android {
+    namespace 'io.github.guigon96.tinteiro'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.guigon96.tinteiro'
+        minSdk 23
+        targetSdk 35
+        versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
+        versionName System.getenv('VERSION_NAME') ?: '0.1.0'
+        manifestPlaceholders = [hostName: appHost, defaultUrl: appUrl, launcherName: 'Tinteiro']
+        resValue 'string', 'app_name', 'Tinteiro'
+        resValue 'string', 'asset_statements', """[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://${appHost}"}}]"""
+    }
+
+    signingConfigs {
+        release {
+            // Chave de assinatura do app. Para trocar, defina ANDROID_KEYSTORE_BASE64 etc. nos segredos do GitHub.
+            storeFile file(System.getenv('KEYSTORE_FILE') ?: 'tinteiro.keystore')
+            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'tinteiro-app'
+            keyAlias System.getenv('KEY_ALIAS') ?: 'tinteiro'
+            keyPassword System.getenv('KEY_PASSWORD') ?: 'tinteiro-app'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+}

@@ -89,8 +89,22 @@ const BACKUP_FOLDER = 'Tinteiro – Backups'
 const MIME = 'application/json'
 const KEEP_BACKUPS = 30
 
+interface NativeBridge {
+  platform: 'desktop'
+  driveLogin(clientId: string, clientSecret: string): Promise<{ access_token: string; expires_in: number }>
+  driveToken(): Promise<{ access_token: string; expires_in: number } | null>
+  driveLogout(): Promise<boolean>
+}
+
 declare global {
-  interface Window { google?: any }
+  interface Window { google?: any; tinteiroNative?: NativeBridge }
+}
+
+/** Running inside the Windows app (Electron)? */
+export const native = () => window.tinteiroNative
+
+export async function getClientSecret(): Promise<string> {
+  return ((await db.kv.get('googleClientSecret'))?.value as string) || ''
 }
 
 let token: { value: string; exp: number } | null = null
@@ -116,9 +130,31 @@ function loadGis() {
 
 export function isConnected() { return !!token && token.exp > Date.now() + 60_000 }
 
+function setToken(r: { access_token: string; expires_in: number }) {
+  token = { value: r.access_token, exp: Date.now() + (r.expires_in - 30) * 1000 }
+}
+
+/** Make sure there is a valid token without bothering the user (Windows app refreshes silently). */
+export async function ensureSession(): Promise<boolean> {
+  if (isConnected()) return true
+  const n = native()
+  if (n) {
+    const r = await n.driveToken().catch(() => null)
+    if (r) { setToken(r); return true }
+  }
+  return false
+}
+
 export async function connectDrive(prompt: '' | 'consent' = ''): Promise<void> {
   const clientId = await getClientId()
   if (!clientId) throw new Error('Configure o "Client ID" do Google em Configurações → Google Drive.')
+  const n = native()
+  if (n) {
+    if (await ensureSession()) return
+    setToken(await n.driveLogin(clientId, await getClientSecret()))
+    await db.kv.put({ key: 'driveEnabled', value: true })
+    return
+  }
   await loadGis()
   const hint = (await db.kv.get('googleHint'))?.value as string | undefined
   await new Promise<void>((resolve, reject) => {
@@ -139,13 +175,14 @@ export async function connectDrive(prompt: '' | 'consent' = ''): Promise<void> {
 }
 
 export async function disconnectDrive() {
-  if (token && window.google) window.google.accounts.oauth2.revoke(token.value, () => {})
+  if (native()) await native()!.driveLogout()
+  else if (token && window.google) window.google.accounts.oauth2.revoke(token.value, () => {})
   token = null
   await db.kv.put({ key: 'driveEnabled', value: false })
 }
 
 async function api(path: string, init: RequestInit = {}, upload = false): Promise<any> {
-  if (!isConnected()) throw new Error('NEEDS_LOGIN')
+  if (!(await ensureSession())) throw new Error('NEEDS_LOGIN')
   const base = upload ? 'https://www.googleapis.com/upload/drive/v3' : 'https://www.googleapis.com/drive/v3'
   const r = await fetch(base + path, { ...init, headers: { Authorization: `Bearer ${token!.value}`, ...(init.headers || {}) } })
   if (r.status === 401) { token = null; throw new Error('NEEDS_LOGIN') }

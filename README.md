@@ -5,19 +5,40 @@ texto contínuo, fichas completas de personagem, worldbuilding com mapas, linha 
 metas de escrita, snapshots de versões e exportação para Word/PDF. Funciona offline e sincroniza
 tablet ⇄ computador pelo Google Drive.
 
-## Como usar no dia a dia
+## Instalar
 
-| Onde | Como instalar |
-|---|---|
-| Computador (Windows/Mac/Linux) | Abra o endereço do app no Chrome ou Edge → ícone **Instalar** na barra de endereço. Vira um app com janela própria. |
-| Tablet Android | Abra o endereço no Chrome → menu ⋮ → **Instalar app**. O Chrome gera e instala um APK automaticamente. |
-| APK "de verdade" (.apk) | Em pwabuilder.com, cole o endereço do app → **Package for stores → Android** → baixe e instale o .apk no tablet. |
+Baixe os instaladores na página **Releases** do repositório (https://github.com/guigon96-glitch/Escritor/releases):
+
+| Onde | Arquivo | Observação |
+|---|---|---|
+| Windows | `Tinteiro-Setup-x.y.z.exe` | App completo, funciona offline. Se aparecer “O Windows protegeu o computador”: **Mais informações → Executar assim mesmo**. |
+| Tablet Android | `Tinteiro.apk` | Abre o Tinteiro em tela cheia (usa o Chrome por baixo). Precisa do site publicado no GitHub Pages. |
+
+Os instaladores são gerados automaticamente pelo GitHub (`.github/workflows/instaladores.yml`) sempre que uma
+tag `v*` é enviada (ex.: `v0.2.0`), ou manualmente em **Actions → Gerar instaladores → Run workflow**.
 
 Os dados ficam no aparelho (funciona sem internet). O botão **☁ Sincronizar** junta as alterações dos dois
 aparelhos no Drive (item por item, a edição mais recente vence) e cria um backup datado por dia
 (últimos 30 ficam na pasta *Tinteiro – Backups*).
 
+### Tirar a barra de endereço do app Android (opcional)
+
+O Android só esconde a barra de endereço se o arquivo `assetlinks.json` estiver na raiz do domínio.
+Crie um repositório chamado `guigon96-glitch.github.io`, com Pages ativado, contendo o arquivo
+`.well-known/assetlinks.json` (cópia de `public/.well-known/assetlinks.json` deste projeto).
+
+### Chave de assinatura do Android
+
+O APK é assinado com `android/app/tinteiro.keystore` (incluída no repositório para manter as atualizações
+compatíveis). Para usar uma chave privada, gere outra e cadastre em *Settings → Secrets → Actions* o segredo
+`ANDROID_KEYSTORE_BASE64` (e, se mudar as senhas, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
+
 ## Configurar o Google Drive (uma vez)
+
+Você cria **duas credenciais no mesmo projeto do Google**: “Aplicativo da Web” (usada pelo tablet/site) e
+“App para computador” (usada pelo app do Windows, que pede também a chave secreta). Como são do mesmo projeto,
+enxergam os mesmos arquivos. Na *Tela de permissão OAuth*, clique em **Publicar app** (“Em produção”) para o
+Google não desconectar a cada 7 dias.
 
 1. console.cloud.google.com → crie um projeto → **APIs e serviços → Biblioteca** → ative **Google Drive API**.
 2. **Tela de permissão OAuth**: tipo Externo; adicione seu e‑mail em *Usuários de teste*.
