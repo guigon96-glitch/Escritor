@@ -181,12 +181,29 @@ export async function disconnectDrive() {
   await db.kv.put({ key: 'driveEnabled', value: false })
 }
 
+/** Turn Google's JSON errors into a short explanation in Portuguese. */
+function driveError(status: number, body: string): string {
+  let reason = '', msg = '', link = ''
+  try {
+    const e = JSON.parse(body).error
+    msg = e?.message || ''
+    reason = e?.details?.find((d: any) => d.reason)?.reason || e?.errors?.[0]?.reason || ''
+    link = e?.details?.find((d: any) => d.metadata?.activationUrl)?.metadata.activationUrl || ''
+  } catch { /* not JSON */ }
+  if (reason === 'SERVICE_DISABLED' || reason === 'accessNotConfigured')
+    return `A Google Drive API não está ativada no seu projeto do Google Cloud. Abra ${link || 'console.cloud.google.com → APIs e serviços → Biblioteca → Google Drive API'}, clique em "Ativar", espere 2–3 minutos e sincronize de novo.`
+  if (status === 403 && /insufficient|scope/i.test(body)) return 'O Google não deu permissão de acesso ao Drive. Desconecte e conecte de novo, marcando a permissão pedida.'
+  if (status === 429 || /rateLimit|quota/i.test(reason)) return 'O Google pediu para esperar um pouco (limite de uso). Tente sincronizar de novo em alguns minutos.'
+  if (status >= 500) return 'O Google Drive está instável agora. Tente de novo em alguns minutos.'
+  return `Erro do Google Drive (${status})${msg ? ': ' + msg : ''}`
+}
+
 async function api(path: string, init: RequestInit = {}, upload = false): Promise<any> {
   if (!(await ensureSession())) throw new Error('NEEDS_LOGIN')
   const base = upload ? 'https://www.googleapis.com/upload/drive/v3' : 'https://www.googleapis.com/drive/v3'
   const r = await fetch(base + path, { ...init, headers: { Authorization: `Bearer ${token!.value}`, ...(init.headers || {}) } })
   if (r.status === 401) { token = null; throw new Error('NEEDS_LOGIN') }
-  if (!r.ok) throw new Error(`Drive: ${r.status} ${await r.text()}`)
+  if (!r.ok) throw new Error(driveError(r.status, await r.text()))
   const ct = r.headers.get('content-type') || ''
   return ct.includes('json') ? r.json() : r.text()
 }
