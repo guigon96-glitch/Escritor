@@ -71,7 +71,7 @@ export function Toaster() {
     toastFn = (m, kind = 'ok') => {
       const id = Date.now() + Math.random()
       setItems(x => [...x, { id, m, kind }])
-      setTimeout(() => setItems(x => x.filter(i => i.id !== id)), kind === 'err' ? 7000 : 3500)
+      setTimeout(() => setItems(x => x.filter(i => i.id !== id)), kind === 'err' ? 15000 : 3500)
     }
     return () => { toastFn = null }
   }, [])
