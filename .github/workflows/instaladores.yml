@@ -1,7 +1,8 @@
 name: Gerar instaladores (Windows e Android)
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths-ignore: ['README.md']
   workflow_dispatch:
 permissions:
   contents: write
@@ -9,7 +10,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -29,14 +30,14 @@ jobs:
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
+          gradle-version: '8.14.3'
       - name: Usar chave própria (opcional, via segredos do GitHub)
         if: ${{ env.KEYSTORE_B64 != '' }}
         run: echo "$KEYSTORE_B64" | base64 -d > android/app/custom.keystore && echo "KEYSTORE_FILE=custom.keystore" >> $GITHUB_ENV
@@ -45,7 +46,7 @@ jobs:
         run: gradle assembleRelease --no-daemon
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: ${{ github.ref_type == 'tag' && github.ref_name || '0.0.0-teste' }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
       - run: cp android/app/build/outputs/apk/release/app-release.apk Tinteiro.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -53,7 +54,6 @@ jobs:
           path: Tinteiro.apk
 
   publicar:
-    if: github.ref_type == 'tag'
     needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +63,10 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: Tinteiro ${{ github.ref_name }}
+          name: Tinteiro — versão ${{ github.run_number }}
+          tag_name: versao-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
           files: out/*
           body: |
             ## Como instalar

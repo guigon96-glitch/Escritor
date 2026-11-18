@@ -8,7 +8,7 @@ def appUrl = 'https://guigon96-glitch.github.io/Escritor/'
 
 android {
     namespace 'io.github.guigon96.tinteiro'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'io.github.guigon96.tinteiro'

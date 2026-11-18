@@ -14,8 +14,9 @@ Baixe os instaladores na página **Releases** do repositório (https://github.co
 | Windows | `Tinteiro-Setup-x.y.z.exe` | App completo, funciona offline. Se aparecer “O Windows protegeu o computador”: **Mais informações → Executar assim mesmo**. |
 | Tablet Android | `Tinteiro.apk` | Abre o Tinteiro em tela cheia (usa o Chrome por baixo). Precisa do site publicado no GitHub Pages. |
 
-Os instaladores são gerados automaticamente pelo GitHub (`.github/workflows/instaladores.yml`) sempre que uma
-tag `v*` é enviada (ex.: `v0.2.0`), ou manualmente em **Actions → Gerar instaladores → Run workflow**.
+Os instaladores são gerados automaticamente pelo GitHub (`.github/workflows/instaladores.yml`) a cada atualização
+da branch `main`, ou manualmente em **Actions → Gerar instaladores → Run workflow**. A versão mais nova fica
+sempre marcada como *Latest* na página Releases.
 
 Os dados ficam no aparelho (funciona sem internet). O botão **☁ Sincronizar** junta as alterações dos dois
 aparelhos no Drive (item por item, a edição mais recente vence) e cria um backup datado por dia
