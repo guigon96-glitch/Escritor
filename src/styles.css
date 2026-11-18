@@ -208,6 +208,10 @@ button.sprint.on { background: var(--accent); color: var(--accent-ink); margin-l
 .outliner td input:hover, .outliner td select:hover, .outliner td textarea:hover { border-color: var(--line); }
 .outliner tr.is-folder td { background: color-mix(in srgb, var(--sel) 40%, transparent); font-weight: 600; }
 .outliner .num { text-align: right; width: 80px; }
+.outliner th:nth-child(1), .outliner td:nth-child(1) { min-width: 210px; }
+.outliner th:nth-child(2), .outliner td:nth-child(2) { min-width: 320px; width: 40%; }
+.outliner td:nth-child(3) select, .outliner td:nth-child(4) select, .outliner td:nth-child(5) select { min-width: 130px; }
+.outliner td:nth-child(6) input { min-width: 150px; }
 .outliner td.num input { text-align: right; width: 80px; }
 .scriv { height: auto; }
 .scriv .page { margin-top: 10px; }
