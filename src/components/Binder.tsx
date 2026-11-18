@@ -3,7 +3,7 @@ import { db, now, uid, type BNode, type RootRole } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { childrenOf, descendants, roleOf, wordsOf, fmt } from '../lib/util'
 import { WORLD_TEMPLATES, templateFor } from '../lib/templates'
-import { Confirm, Menu } from './ui'
+import { Confirm, Menu, Modal } from './ui'
 
 const ROOT_ICON: Record<RootRole, string> = { manuscript: '📖', characters: '👥', world: '🌍', timeline: '🕰', research: '🔬', notes: '🗒', trash: '🗑' }
 
@@ -29,6 +29,7 @@ export default function Binder() {
   const [worldMenu, setWorldMenu] = useState<{ x: number; y: number; parent: string } | null>(null)
   const [confirm, setConfirm] = useState<{ text: string; yes: () => void } | null>(null)
   const [filter, setFilter] = useState('')
+  const [moving, setMoving] = useState<BNode | null>(null)
 
   const roots = nodes.filter(n => n.kind === 'root' && n.role !== 'timeline').sort((a, b) => a.order - b.order)
   const labelColor = (id: string) => project.labels.find(l => l.id === id)?.color
@@ -134,6 +135,7 @@ export default function Binder() {
     }
     if (n.kind === 'text') items.push({ label: 'Nova cena depois desta', onClick: async () => { const id = await addNode(n.parentId!, 'text'); await move(id, n.id, 'after') } })
     items.push('-',
+      { label: 'Mover para… (escolher pasta)', onClick: () => setMoving(n) },
       { label: 'Mover para cima', onClick: () => shift(n, -1) },
       { label: 'Mover para baixo', onClick: () => shift(n, 1) },
       { label: 'Avançar nível (para dentro do anterior)', onClick: () => indent(n) },
@@ -153,6 +155,9 @@ export default function Binder() {
     const pos: DropPos = n.kind === 'root' ? 'inside' : y < 0.3 ? 'before' : y > 0.7 || !canInside ? 'after' : 'inside'
     if (drop?.id !== n.id || drop.pos !== pos) setDrop({ id: n.id, pos })
   }
+
+  const pathOf = (t: BNode): string => { const p = t.parentId ? byId.get(t.parentId) : undefined; return p ? pathOf(p) + ' › ' + t.title : t.title }
+  const rootOrder = (t: BNode) => { let c: BNode | undefined = t; while (c?.parentId) c = byId.get(c.parentId); return c?.order ?? 0 }
 
   const q = filter.trim().toLowerCase()
   const matches = (n: BNode): boolean => !q || n.title.toLowerCase().includes(q) || childrenOf(nodes, n.id).some(matches)
@@ -217,6 +222,18 @@ export default function Binder() {
       { label: '🗺 Mapa (imagem com marcadores)', onClick: () => { addNode(worldMenu.parent, 'map', { title: 'Novo mapa' }) } },
       { label: '📁 Pasta', onClick: () => { addNode(worldMenu.parent, 'folder') } }
     ]} />}
+    {moving && <Modal title={`Mover “${moving.title}” para…`} onClose={() => setMoving(null)}>
+      <ul className="move-list">
+        {nodes.filter(t => !t.deleted && (t.kind === 'root' || t.kind === 'folder') && t.id !== moving.id && t.role !== 'trash' && roleOf(nodes, t) !== 'trash' && !descendants(nodes, moving.id).some(d => d.id === t.id))
+          .sort((a, b) => {
+            const ra = rootOrder(a), rb = rootOrder(b)
+            return ra !== rb ? ra - rb : pathOf(a).localeCompare(pathOf(b), 'pt-BR', { numeric: true })
+          })
+          .map(t => <li key={t.id}><button className={t.id === moving.parentId ? 'on' : ''} onClick={() => { move(moving.id, t.id, 'inside'); setMoving(null) }}>
+            {nodeIcon(t, roleOf(nodes, t))} {pathOf(t)}
+          </button></li>)}
+      </ul>
+    </Modal>}
     {confirm && <Confirm danger text={confirm.text} yes="Excluir" onNo={() => setConfirm(null)} onYes={() => { confirm.yes(); setConfirm(null) }} />}
   </div>
 }

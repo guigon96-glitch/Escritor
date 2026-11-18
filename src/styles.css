@@ -377,3 +377,52 @@ button.sprint.on { background: var(--accent); color: var(--accent-ink); margin-l
   .bn { min-height: 40px; }
   .ed-toolbar button { min-width: 38px; min-height: 38px; }
 }
+
+/* ---------- Tablet / Android ---------- */
+:root { --sat: max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px)); --sab: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px)); --sal: max(var(--safe-area-inset-left, 0px), env(safe-area-inset-left, 0px)); --sar: max(var(--safe-area-inset-right, 0px), env(safe-area-inset-right, 0px)); }
+.topbar { padding-top: calc(6px + var(--sat)); padding-left: calc(10px + var(--sal)); padding-right: calc(10px + var(--sar)); }
+.statusbar { padding-bottom: calc(6px + var(--sab)); }
+.home { padding-top: calc(24px + var(--sat)); padding-bottom: calc(60px + var(--sab)); }
+.app { background: var(--panel); }
+.insp-scrim { display: none; z-index: 15 !important; }
+@media (max-width: 1200px) { .insp-scrim { display: block; position: absolute; inset: 0; background: rgba(0,0,0,.2); } }
+.move-list { list-style: none; margin: 0; padding: 0; max-height: 60vh; overflow: auto; }
+.move-list button { width: 100%; text-align: left; border: none; border-bottom: 1px solid var(--line); border-radius: 0; white-space: normal; min-height: 44px; }
+.card-move { display: none; }
+
+@media (pointer: coarse) {
+  body { font-size: 15px; -webkit-touch-callout: none; overscroll-behavior: none; }
+  .topbar, .binder, .ed-toolbar, .tabs, .card-head, .card-foot, .tools, .seg, .menu, .statusbar, .legend { -webkit-user-select: none; user-select: none; }
+  button { min-height: 42px; }
+  button.icon { min-height: 40px; min-width: 40px; font-size: 18px; }
+  input, select, textarea { min-height: 42px; font-size: 16px; }
+  .topbar { min-height: 58px; gap: 4px; }
+  .tools button { padding: 6px 10px; }
+  .bn { min-height: 46px; padding: 6px 8px; font-size: 15px; }
+  .bn .tw { width: 28px; min-height: 36px; font-size: 13px; }
+  .bn-add, .bn-more { min-height: 38px; min-width: 38px; font-size: 18px; opacity: .75; }
+  .binder-quick button { min-height: 40px; font-size: 14px; }
+  .binder-pane { width: 320px; }
+  .inspector-pane { width: 360px; }
+  .menu { min-width: 260px; }
+  .menu button { min-height: 46px; font-size: 15px; }
+  .ed-toolbar { padding: 6px 8px; gap: 4px; }
+  .ed-toolbar button { min-width: 44px; min-height: 44px; font-size: 16px; }
+  .ed-toolbar select { min-height: 42px; }
+  .ed-scroll { padding: 18px 12px 120px; }
+  .ProseMirror { min-height: 60vh; }
+  .card-move { display: inline-flex; gap: 2px; }
+  .card-move .icon { min-height: 32px; min-width: 32px; font-size: 13px; }
+  .card { cursor: default; }
+  .tabs button { min-height: 46px; padding: 8px 14px; }
+  .modal header .icon { min-width: 44px; min-height: 44px; }
+  .statusbar { font-size: 13px; gap: 14px; }
+  .findbar input:not([type=checkbox]) { width: 180px; }
+  .rel-node circle { r: 36; }
+}
+/* tablet em pé: estrutura e inspetor viram gavetas sobre o texto */
+@media (pointer: coarse) and (max-width: 1000px) {
+  .binder-pane { position: absolute; left: 0; top: 0; bottom: 0; z-index: 30; width: min(340px, 85vw); box-shadow: 6px 0 24px rgba(0,0,0,.2); }
+  .tools button span { display: none; }
+  .tools button { font-size: 20px; }
+}

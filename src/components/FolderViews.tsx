@@ -55,6 +55,14 @@ function Corkboard({ parent }: { parent: BNode }) {
   const [size, setSize] = useState(220)
   const label = (id: string) => project.labels.find(l => l.id === id)
 
+  const swap = async (k: BNode, d: -1 | 1) => {
+    const i = kids.findIndex(x => x.id === k.id)
+    const o = kids[i + d]
+    if (!o) return
+    await db.nodes.update(k.id, { order: o.order, updatedAt: now() })
+    await db.nodes.update(o.id, { order: k.order, updatedAt: now() })
+  }
+
   const dropOn = async (targetId: string) => {
     if (!drag || drag === targetId) return
     const list = kids.filter(k => k.id !== drag)
@@ -84,6 +92,10 @@ function Corkboard({ parent }: { parent: BNode }) {
           </div>
           <LazyText className="card-syn" value={k.synopsis} rows={4} placeholder="Sinopse da cena…" onCommit={v => updateNode(k.id, { synopsis: v })} />
           <div className="card-foot">
+            <span className="card-move">
+              <button className="icon" title="Mover para trás" onClick={() => swap(k, -1)}>◀</button>
+              <button className="icon" title="Mover para frente" onClick={() => swap(k, 1)}>▶</button>
+            </span>
             {k.status && <span className="stamp">{k.status}</span>}
             {pov && <span className="muted" title="Ponto de vista">👁 {pov.title}</span>}
             <span className="muted">{fmt(wc)} pal.</span>

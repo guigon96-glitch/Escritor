@@ -81,9 +81,11 @@ export function Toaster() {
 export function Menu({ x, y, items, onClose }: { x: number; y: number; items: ({ label: string; onClick: () => void; danger?: boolean } | '-')[]; onClose: () => void }) {
   useEffect(() => {
     const c = () => onClose()
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     setTimeout(() => window.addEventListener('click', c), 0)
     window.addEventListener('blur', c)
-    return () => { window.removeEventListener('click', c); window.removeEventListener('blur', c) }
+    window.addEventListener('keydown', k)
+    return () => { window.removeEventListener('click', c); window.removeEventListener('blur', c); window.removeEventListener('keydown', k) }
   }, [onClose])
   const left = Math.min(x, window.innerWidth - 230)
   const top = Math.min(y, window.innerHeight - items.length * 34 - 16)

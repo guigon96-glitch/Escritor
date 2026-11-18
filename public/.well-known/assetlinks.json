@@ -1,4 +1,0 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": { "namespace": "android_app", "package_name": "io.github.guigon96.tinteiro", "sha256_cert_fingerprints": ["BD:BD:F8:8D:0F:26:93:32:50:4E:ED:94:C0:85:BD:B0:AC:C4:4E:60:7E:27:D2:9B:96:A1:7F:F8:97:2A:C3:36"] }
-}]

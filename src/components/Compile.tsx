@@ -85,7 +85,7 @@ export default function Compile({ onClose }: { onClose: () => void }) {
       <div>
         <h4>Formato</h4>
         <div className="seg">
-          {([['docx', 'Word (.docx)'], ['pdf', 'PDF (imprimir)'], ['md', 'Markdown'], ['txt', 'Texto']] as [Format, string][]).map(([k, l]) => <button key={k} className={fmtSel === k ? 'on' : ''} onClick={() => setFmt(k)}>{l}</button>)}
+          {([['docx', 'Word (.docx)'], ['pdf', 'PDF (imprimir)'], ['md', 'Markdown'], ['txt', 'Texto']] as [Format, string][]).filter(([k]) => !(k === 'pdf' && window.tinteiroNative?.platform === 'android')).map(([k, l]) => <button key={k} className={fmtSel === k ? 'on' : ''} onClick={() => setFmt(k)}>{l}</button>)}
         </div>
         <h4>Página</h4>
         <div className="grid2">

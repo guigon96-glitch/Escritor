@@ -90,7 +90,7 @@ const MIME = 'application/json'
 const KEEP_BACKUPS = 30
 
 interface NativeBridge {
-  platform: 'desktop'
+  platform: 'desktop' | 'android'
   driveLogin(clientId: string, clientSecret: string): Promise<{ access_token: string; expires_in: number }>
   driveToken(): Promise<{ access_token: string; expires_in: number } | null>
   driveLogout(): Promise<boolean>
@@ -146,9 +146,10 @@ export async function ensureSession(): Promise<boolean> {
 }
 
 export async function connectDrive(prompt: '' | 'consent' = ''): Promise<void> {
-  const clientId = await getClientId()
-  if (!clientId) throw new Error('Configure o "Client ID" do Google em Configurações → Google Drive.')
   const n = native()
+  // No Android o login usa a conta do aparelho: não precisa de Client ID digitado.
+  const clientId = n?.platform === 'android' ? '' : await getClientId()
+  if (!clientId && n?.platform !== 'android') throw new Error('Configure o "Client ID" do Google em Configurações → Google Drive.')
   if (n) {
     if (await ensureSession()) return
     setToken(await n.driveLogin(clientId, await getClientSecret()))

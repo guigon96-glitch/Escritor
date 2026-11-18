@@ -1,0 +1,14 @@
+{
+  "appId": "io.github.guigon96.tinteiro",
+  "appName": "Tinteiro",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#efe8da"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

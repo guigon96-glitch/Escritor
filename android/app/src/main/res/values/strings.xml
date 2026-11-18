@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tinteiro</string>
+    <string name="title_activity_main">Tinteiro</string>
+    <string name="package_name">io.github.guigon96.tinteiro</string>
+    <string name="custom_url_scheme">io.github.guigon96.tinteiro</string>
+</resources>

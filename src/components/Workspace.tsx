@@ -19,10 +19,16 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   const [folderView, setFolderView] = useState<FolderView>('corkboard')
   const [tool, setTool] = useState<Tool>(null)
   const [composition, setComposition] = useState(false)
-  const [binderOpen, setBinderOpen] = useState(window.innerWidth > 900)
+  const [binderOpen, setBinderOpen] = useState(window.innerWidth > (matchMedia('(pointer: coarse)').matches ? 1000 : 900))
   const [inspectorOpen, setInspectorOpen] = useState(window.innerWidth > 1200)
   const [sync, setSync] = useState<SyncState>('off')
   const dirty = useRef(false)
+  const [vw, setVw] = useState(window.innerWidth)
+  useEffect(() => {
+    const r = () => setVw(window.innerWidth)
+    window.addEventListener('resize', r)
+    return () => window.removeEventListener('resize', r)
+  }, [])
 
   const byId = useMemo(() => new Map((nodes || []).map(n => [n.id, n])), [nodes])
 
@@ -35,7 +41,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
     setSelectedId(id)
     setTool(null)
     db.kv.put({ key: 'sel:' + projectId, value: id })
-    if (window.innerWidth <= 900) setBinderOpen(false)
+    if (window.innerWidth <= 900 || (window.innerWidth <= 1000 && matchMedia('(pointer: coarse)').matches)) setBinderOpen(false)
   }, [projectId])
 
   // default selection: first scene of manuscript
@@ -126,7 +132,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
 
   const ws: WS = { project, nodes, byId, selectedId, select, folderView, setFolderView: v => { setFolderView(v); db.kv.put({ key: 'folderView', value: v }) }, tool, setTool, composition, setComposition, addNode, trashNode, recordWords }
 
-  const syncLabel: Record<SyncState, string> = { off: '☁ Conectar Drive', idle: '☁ Sincronizado', syncing: '⟳ Sincronizando…', error: '⚠ Erro ao sincronizar', login: '☁ Entrar no Google' }
+  const syncLabel: Record<SyncState, [string, string]> = { off: ['☁', 'Conectar Drive'], idle: ['☁', 'Sincronizado'], syncing: ['⟳', 'Sincronizando…'], error: ['⚠', 'Erro ao sincronizar'], login: ['☁', 'Entrar no Google'] }
 
   return <WSContext.Provider value={ws}>
     <div className={`app theme-${project.settings.theme}${composition ? ' composing' : ''}`}>
@@ -142,13 +148,14 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
           <button onClick={() => setTool('names')}>🎲<span>Nomes</span></button>
           <button onClick={() => setTool('compile')}>📕<span>Exportar</span></button>
           <button onClick={() => setTool('settings')}>⚙<span>Ajustes</span></button>
-          <button className={'sync ' + sync} onClick={() => doSync(true)} disabled={sync === 'syncing'} title={project.lastSync ? 'Última sincronização: ' + new Date(project.lastSync).toLocaleString('pt-BR') : ''}>{syncLabel[sync]}</button>
+          <button className={'sync ' + sync} onClick={() => doSync(true)} disabled={sync === 'syncing'} title={syncLabel[sync][1] + (project.lastSync ? ' — última sincronização: ' + new Date(project.lastSync).toLocaleString('pt-BR') : '')}>{syncLabel[sync][0]}<span>{syncLabel[sync][1]}</span></button>
         </nav>
         <button className={'icon' + (inspectorOpen ? ' on' : '')} title="Inspetor" onClick={() => setInspectorOpen(o => !o)}>ⓘ</button>
       </header>}
       <div className="body">
         {!composition && binderOpen && <aside className="binder-pane"><Binder /></aside>}
-        {!composition && binderOpen && window.innerWidth <= 900 && <div className="scrim" onClick={() => setBinderOpen(false)} />}
+        {!composition && binderOpen && (vw <= 900 || (vw <= 1000 && matchMedia('(pointer: coarse)').matches)) && <div className="scrim" onClick={() => setBinderOpen(false)} />}
+        {!composition && inspectorOpen && vw <= 1200 && <div className="scrim insp-scrim" onClick={() => setInspectorOpen(false)} />}
         <main className="main-pane">
           {tool && ['timeline', 'relations', 'stats'].includes(tool) ? <Tools /> : <MainView />}
         </main>

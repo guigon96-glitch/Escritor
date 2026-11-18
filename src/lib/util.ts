@@ -64,6 +64,10 @@ export function fmtDate(t: number) {
 }
 
 export function download(name: string, blob: Blob) {
+  if (window.tinteiroNative?.platform === 'android') {
+    import('./native').then(m => m.saveNative(name, blob)).catch(e => alert('Não foi possível salvar: ' + e.message))
+    return
+  }
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = name

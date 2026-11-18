@@ -1,49 +1,65 @@
-plugins {
-    id 'com.android.application'
-}
-
-// Endereço onde o Tinteiro está publicado (GitHub Pages).
-def appHost = 'guigon96-glitch.github.io'
-def appUrl = 'https://guigon96-glitch.github.io/Escritor/'
+apply plugin: 'com.android.application'
 
 android {
-    namespace 'io.github.guigon96.tinteiro'
-    compileSdk 36
-
+    namespace = "io.github.guigon96.tinteiro"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId 'io.github.guigon96.tinteiro'
-        minSdk 24
-        targetSdk 35
+        applicationId "io.github.guigon96.tinteiro"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
-        versionName System.getenv('VERSION_NAME') ?: '0.1.0'
-        manifestPlaceholders = [hostName: appHost, defaultUrl: appUrl, launcherName: 'Tinteiro']
-        resValue 'string', 'app_name', 'Tinteiro'
-        resValue 'string', 'asset_statements', """[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"web","site":"https://${appHost}"}}]"""
+        versionName System.getenv('VERSION_NAME') ?: '0.2.0'
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
     }
-
     signingConfigs {
         release {
-            // Chave de assinatura do app. Para trocar, defina ANDROID_KEYSTORE_BASE64 etc. nos segredos do GitHub.
+            // Chave do app (a mesma de sempre, para as atualizações instalarem por cima).
             storeFile file(System.getenv('KEYSTORE_FILE') ?: 'tinteiro.keystore')
             storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'tinteiro-app'
             keyAlias System.getenv('KEY_ALIAS') ?: 'tinteiro'
             keyPassword System.getenv('KEY_PASSWORD') ?: 'tinteiro-app'
         }
     }
-
     buildTypes {
         release {
-            minifyEnabled false
             signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+}
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
 
 dependencies {
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation "com.google.android.gms:play-services-auth:21.6.0"
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }

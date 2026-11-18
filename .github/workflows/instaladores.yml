@@ -31,22 +31,27 @@ jobs:
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Gerar o app web e copiar para o Android
+        run: npm run build && npx cap sync android
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.14.3'
       - name: Usar chave própria (opcional, via segredos do GitHub)
         if: ${{ env.KEYSTORE_B64 != '' }}
         run: echo "$KEYSTORE_B64" | base64 -d > android/app/custom.keystore && echo "KEYSTORE_FILE=custom.keystore" >> $GITHUB_ENV
       - name: Gerar APK
         working-directory: android
-        run: gradle assembleRelease --no-daemon
+        run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.1.${{ github.run_number }}
+          VERSION_NAME: 0.2.${{ github.run_number }}
       - run: cp android/app/build/outputs/apk/release/app-release.apk Tinteiro.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -72,4 +77,4 @@ jobs:
             ## Como instalar
             **Windows:** baixe `Tinteiro-Setup-*.exe` e execute. Se o Windows mostrar “O Windows protegeu o computador”, clique em **Mais informações → Executar assim mesmo** (o app não é assinado por uma empresa).
 
-            **Tablet Android:** baixe `Tinteiro.apk` no tablet e abra. Permita “instalar apps desconhecidos” para o navegador/arquivos quando o Android pedir.
+            **Tablet Android:** baixe `Tinteiro.apk` no tablet e abra. Permita “instalar apps desconhecidos” para o navegador/arquivos quando o Android pedir. O app funciona offline e não precisa do site.
