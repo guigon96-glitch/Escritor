@@ -1,0 +1,91 @@
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db, now, uid, type TimelineEvent } from '../lib/db'
+import { useWS } from '../lib/ctx'
+import { descendants, roleOf, rootByRole } from '../lib/util'
+import { LazyInput, LazyText, Modal, MultiPick } from './ui'
+
+const COLORS = ['#c0392b', '#d35400', '#f1c40f', '#27ae60', '#16a085', '#2980b9', '#8e44ad', '#7f8c8d']
+
+export default function Timeline() {
+  const { project, nodes, select } = useWS()
+  const events = useLiveQuery(() => db.events.where('projectId').equals(project.id).filter(e => !e.deleted).sortBy('sortKey'), [project.id]) || []
+  const [edit, setEdit] = useState<TimelineEvent | null>(null)
+  const [who, setWho] = useState('')
+  const [showScenes, setShowScenes] = useState(true)
+  const chars = nodes.filter(n => n.kind === 'character' && !n.deleted && roleOf(nodes, n) === 'characters').map(n => ({ id: n.id, title: n.title }))
+  const places = nodes.filter(n => (n.kind === 'world' || n.kind === 'map') && !n.deleted && roleOf(nodes, n) === 'world').map(n => ({ id: n.id, title: n.title }))
+  const ms = rootByRole(nodes, 'manuscript')
+  const scenes = ms ? descendants(nodes, ms.id).filter(n => n.kind === 'text') : []
+  const sceneOpts = scenes.map(s => ({ id: s.id, title: s.title }))
+  const datedScenes = scenes.filter(s => s.storyDate && (!who || s.pov === who || s.characterIds.includes(who)))
+
+  const add = async () => {
+    const e: TimelineEvent = { id: uid(), projectId: project.id, title: 'Novo evento', date: '', sortKey: (events.at(-1)?.sortKey ?? 0) + 10, description: '', color: COLORS[5], nodeIds: [], characterIds: [], locationIds: [], updatedAt: now() }
+    await db.events.add(e)
+    setEdit(e)
+  }
+  const save = (id: string, patch: Partial<TimelineEvent>) => {
+    db.events.update(id, { ...patch, updatedAt: now() })
+    setEdit(e => e && e.id === id ? { ...e, ...patch } : e)
+  }
+  const swap = async (i: number, d: -1 | 1) => {
+    const a = events[i], b = events[i + d]
+    if (!a || !b) return
+    await db.events.update(a.id, { sortKey: b.sortKey, updatedAt: now() })
+    await db.events.update(b.id, { sortKey: a.sortKey, updatedAt: now() })
+  }
+  const shown = events.filter(e => !who || e.characterIds.includes(who))
+
+  return <div className="timeline-view">
+    <div className="fv-head">
+      <div><h2>🕰 Linha do tempo</h2><span className="muted">A cronologia da história (não a ordem do livro). Use para flashbacks, idades e eventos do passado.</span></div>
+      <div className="row wrap">
+        <select value={who} onChange={e => setWho(e.target.value)}><option value="">Todos os personagens</option>{chars.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
+        <label className="inline"><input type="checkbox" checked={showScenes} onChange={e => setShowScenes(e.target.checked)} /> mostrar cenas com data</label>
+        <button className="primary" onClick={add}>＋ Evento</button>
+      </div>
+    </div>
+    <div className="tl">
+      {shown.length === 0 && <p className="muted">Nenhum evento ainda.</p>}
+      {shown.map((e) => {
+        const i = events.indexOf(e)
+        return <div key={e.id} className="tl-item">
+          <div className="tl-dot" style={{ background: e.color }} />
+          <div className="tl-card" onClick={() => setEdit(e)}>
+            <div className="tl-date">{e.date || 'sem data'}</div>
+            <strong>{e.title}</strong>
+            {e.description && <p>{e.description}</p>}
+            <div className="chips small">
+              {e.characterIds.map(id => <span key={id}>👤 {nodes.find(n => n.id === id)?.title}</span>)}
+              {e.locationIds.map(id => <span key={id}>📍 {nodes.find(n => n.id === id)?.title}</span>)}
+              {e.nodeIds.map(id => <span key={id} className="linkish" onClick={ev => { ev.stopPropagation(); select(id) }}>📄 {nodes.find(n => n.id === id)?.title}</span>)}
+            </div>
+          </div>
+          <div className="tl-move">
+            <button className="icon" onClick={() => swap(i, -1)} title="Mais cedo">▲</button>
+            <button className="icon" onClick={() => swap(i, 1)} title="Mais tarde">▼</button>
+          </div>
+        </div>
+      })}
+    </div>
+    {showScenes && datedScenes.length > 0 && <>
+      <h3 className="group-title">Cenas com “data na história” (pelo Inspetor)</h3>
+      <table className="outliner"><tbody>
+        {datedScenes.map(s => <tr key={s.id}><td style={{ width: 200 }}><b>{s.storyDate}</b></td><td><button className="linkish" onClick={() => select(s.id)}>{s.title}</button></td><td className="muted">{s.synopsis}</td></tr>)}
+      </tbody></table>
+    </>}
+    {edit && <Modal title="Evento" onClose={() => setEdit(null)} footer={<>
+      <button className="danger" onClick={() => { save(edit.id, { deleted: true }); setEdit(null) }}>Excluir</button>
+      <button className="primary" onClick={() => setEdit(null)}>Pronto</button>
+    </>}>
+      <label>Título<LazyInput value={edit.title} onCommit={v => save(edit.id, { title: v })} /></label>
+      <label>Data / época (texto livre)<LazyInput value={edit.date} placeholder="Ex.: 12 anos antes · Ano 1042 da Era do Sol · Verão de 1998" onCommit={v => save(edit.id, { date: v })} /></label>
+      <label>Descrição<LazyText value={edit.description} rows={3} onCommit={v => save(edit.id, { description: v })} /></label>
+      <label>Cor<div className="row">{COLORS.map(c => <button key={c} className={'swatch' + (edit.color === c ? ' on' : '')} style={{ background: c }} onClick={() => save(edit.id, { color: c })} />)}</div></label>
+      <label>Personagens<MultiPick options={chars} value={edit.characterIds} placeholder="+ personagem" onChange={v => save(edit.id, { characterIds: v })} /></label>
+      <label>Lugares<MultiPick options={places} value={edit.locationIds} placeholder="+ lugar" onChange={v => save(edit.id, { locationIds: v })} /></label>
+      <label>Cenas relacionadas<MultiPick options={sceneOpts} value={edit.nodeIds} placeholder="+ cena" onChange={v => save(edit.id, { nodeIds: v })} /></label>
+    </Modal>}
+  </div>
+}
