@@ -5,6 +5,8 @@ import { NAME_STYLES, generateName } from '../lib/names'
 import { exportBundle, fetchBundle, importAsCopy, ensureSession, listBackups } from '../lib/sync'
 import { download, fmtDate, safeName, rootByRole } from '../lib/util'
 import Timeline from './Timeline'
+import { PlotGrid, StructureView } from './Planning'
+import StyleAnalysis from './StyleAnalysis'
 import RelationMap from './RelationMap'
 import Stats from './Stats'
 import Compile from './Compile'
@@ -12,16 +14,20 @@ import Search from './Search'
 import DriveSetup from './DriveSetup'
 import { FONTS } from './Editor'
 import { LazyInput, Modal, toast } from './ui'
+import { AboutUpdates } from './Updates'
 
 export default function Tools() {
-  const { tool, setTool } = useWS()
+  const { tool, setTool, searchQuery } = useWS()
   const close = () => setTool(null)
   switch (tool) {
     case 'timeline': return <Timeline />
     case 'relations': return <RelationMap />
     case 'stats': return <Stats />
+    case 'grid': return <PlotGrid />
+    case 'structure': return <StructureView />
+    case 'style': return <StyleAnalysis />
     case 'compile': return <Compile onClose={close} />
-    case 'search': return <Search onClose={close} />
+    case 'search': return <Search onClose={close} initial={searchQuery} />
     case 'names': return <NameGen onClose={close} />
     case 'settings': return <Settings onClose={close} />
     default: return null
@@ -112,6 +118,10 @@ function Settings({ onClose }: { onClose: () => void }) {
           <button className="icon" onClick={() => up({ statuses: project.statuses.filter((_, j) => j !== i) })}>🗑</button>
         </div>)}
         <button onClick={() => up({ statuses: [...project.statuses, 'Novo status'] })}>＋ Status</button>
+      </section>
+      <section>
+        <h4>Sobre e atualizações</h4>
+        <AboutUpdates />
       </section>
       <section>
         <h4>Sincronização e backup</h4>

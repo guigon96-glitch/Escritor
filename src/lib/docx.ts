@@ -250,3 +250,44 @@ function htmlToMarkdown(html: string): string {
     }
   }).join('\n\n')
 }
+
+/* ---------- EPUB 3 (e-book) ---------- */
+const xesc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+/** Converte o HTML do editor para XHTML válido (fecha <br>, remove anotações). */
+function toXhtml(html: string) {
+  const doc = new DOMParser().parseFromString(`<div>${html.replace(/<mark\b[^>]*>[\s\S]*?<\/mark>/g, '')}</div>`, 'text/html')
+  return new XMLSerializer().serializeToString(doc.body.firstElementChild!).replace(/^<div[^>]*>|<\/div>$/g, '').replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '')
+}
+
+export async function compileEpub(items: CompileItem[], opts: CompileOptions): Promise<Blob> {
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' })
+  zip.file('META-INF/container.xml', '<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
+  const css = `body{font-family:serif;line-height:1.5;margin:0 5%}p{margin:0;text-indent:${opts.indent ? '1.5em' : '0'};text-align:justify}h1,h2{text-align:center;margin:2em 0 1em}h1+p,h2+p,h3+p,.sep+p{text-indent:0}.sep{text-align:center;text-indent:0;margin:1em 0}.title{text-align:center;margin-top:30%}`
+  zip.file('OEBPS/style.css', css)
+  // agrupa em arquivos por capítulo
+  const chapters: { title: string; body: string }[] = []
+  let cur: { title: string; body: string } | null = null
+  let prevScene = false
+  for (const it of items) {
+    if (it.kind === 'chapter' || !cur) {
+      cur = { title: it.kind === 'chapter' ? it.title : opts.title, body: it.kind === 'chapter' && opts.chapterTitles ? `<h2>${xesc(it.title)}</h2>` : '' }
+      chapters.push(cur); prevScene = false
+      if (it.kind === 'chapter') continue
+    }
+    if (prevScene && !opts.sceneTitles) cur.body += `<p class="sep">${xesc(opts.sceneSeparator)}</p>`
+    if (opts.sceneTitles) cur.body += `<h3>${xesc(it.title)}</h3>`
+    cur.body += toXhtml(it.html)
+    prevScene = true
+  }
+  const page = (title: string, body: string) => `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="pt-BR"><head><meta charset="UTF-8"/><title>${xesc(title)}</title><link rel="stylesheet" href="style.css"/></head><body>${body}</body></html>`
+  const files: { id: string; href: string; title: string }[] = []
+  if (opts.titlePage) { zip.file('OEBPS/titulo.xhtml', page(opts.title, `<div class="title"><h1>${xesc(opts.title)}</h1><p>${xesc(opts.author)}</p></div>`)); files.push({ id: 'titulo', href: 'titulo.xhtml', title: opts.title }) }
+  chapters.forEach((c, i) => { const href = `cap${String(i + 1).padStart(3, '0')}.xhtml`; zip.file('OEBPS/' + href, page(c.title, c.body)); files.push({ id: 'c' + (i + 1), href, title: c.title }) })
+  zip.file('OEBPS/nav.xhtml', page('Sumário', `<nav epub:type="toc" id="toc"><h1>Sumário</h1><ol>${files.map(f => `<li><a href="${f.href}">${xesc(f.title)}</a></li>`).join('')}</ol></nav>`))
+  const uidv = 'urn:uuid:' + (crypto.randomUUID ? crypto.randomUUID() : Date.now())
+  const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
+  zip.file('OEBPS/content.opf', `<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" xml:lang="pt-BR"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="bookid">${uidv}</dc:identifier><dc:title>${xesc(opts.title)}</dc:title><dc:creator>${xesc(opts.author || 'Autor')}</dc:creator><dc:language>pt-BR</dc:language><meta property="dcterms:modified">${modified}</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="css" href="style.css" media-type="text/css"/>${files.map(f => `<item id="${f.id}" href="${f.href}" media-type="application/xhtml+xml"/>`).join('')}</manifest><spine>${files.map(f => `<itemref idref="${f.id}"/>`).join('')}</spine></package>`)
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' })
+}

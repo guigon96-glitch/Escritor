@@ -6,6 +6,7 @@ import { importDocx, splitByHeadings } from '../lib/docx'
 import { fmtDate, pickFile, rootByRole } from '../lib/util'
 import { Confirm, LazyInput, Modal, toast } from './ui'
 import DriveSetup from './DriveSetup'
+import { AboutUpdates } from './Updates'
 
 export default function ProjectList({ onOpen }: { onOpen: (id: string) => void }) {
   const projects = useLiveQuery(() => db.projects.orderBy('updatedAt').reverse().filter(p => !p.deleted).toArray(), [])
@@ -105,6 +106,8 @@ export default function ProjectList({ onOpen }: { onOpen: (id: string) => void }
         <button className="icon pc-del" title="Excluir" onClick={e => { e.stopPropagation(); setDelId(p.id) }}>🗑</button>
       </div>)}
     </section>
+
+    <footer className="home-foot"><AboutUpdates /></footer>
 
     {creating && <Modal title="Novo livro" onClose={() => setCreating(false)} footer={<><button onClick={() => setCreating(false)}>Cancelar</button><button className="primary" onClick={create}>Criar</button></>}>
       <label>Título<LazyInput autoFocus value={form.title} onCommit={v => setForm(f => ({ ...f, title: v }))} /></label>

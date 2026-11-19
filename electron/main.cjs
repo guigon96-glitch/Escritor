@@ -6,6 +6,7 @@ const fs = require('node:fs')
 const http = require('node:http')
 const crypto = require('node:crypto')
 const { pathToFileURL } = require('node:url')
+const { autoUpdater } = require('electron-updater')
 
 const DIST = path.join(__dirname, '..', 'dist')
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
@@ -63,7 +64,32 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(file).toString())
   })
   createWindow()
+  setupUpdater()
 })
+
+/* ---------------- Atualização automática (GitHub Releases) ---------------- */
+function sendUpdate(status, data = {}) {
+  if (win && !win.isDestroyed()) win.webContents.send('update:status', { status, ...data })
+}
+function setupUpdater() {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('checking-for-update', () => sendUpdate('checking'))
+  autoUpdater.on('update-available', i => sendUpdate('available', { version: i.version, notes: typeof i.releaseNotes === 'string' ? i.releaseNotes : '' }))
+  autoUpdater.on('update-not-available', () => sendUpdate('none'))
+  autoUpdater.on('download-progress', p => sendUpdate('downloading', { percent: Math.round(p.percent) }))
+  autoUpdater.on('update-downloaded', i => sendUpdate('ready', { version: i.version }))
+  autoUpdater.on('error', e => sendUpdate('error', { message: String(e && e.message || e) }))
+  const check = () => { if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {}) }
+  setTimeout(check, 8000)
+  setInterval(check, 4 * 60 * 60 * 1000)
+}
+ipcMain.handle('update:check', async () => {
+  if (!app.isPackaged) { sendUpdate('none'); return false }
+  try { await autoUpdater.checkForUpdates(); return true } catch (e) { sendUpdate('error', { message: e.message }); return false }
+})
+ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall(false, true) })
+ipcMain.handle('app:version', () => app.getVersion())
 
 app.on('window-all-closed', () => app.quit())
 

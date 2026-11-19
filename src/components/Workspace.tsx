@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { blankNode, db, now, today, touchProject, type BNode } from '../lib/db'
-import { WSContext, type FolderView, type Tool, type WS } from '../lib/ctx'
+import { PANE_TOOLS, WSContext, type FolderView, type Tool, type WS } from '../lib/ctx'
+import { Menu } from './ui'
 import { manuscriptWords, roleOf, rootByRole } from '../lib/util'
 import { connectDrive, ensureSession, syncProject } from '../lib/sync'
 import Binder from './Binder'
@@ -18,6 +19,8 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [folderView, setFolderView] = useState<FolderView>('corkboard')
   const [tool, setTool] = useState<Tool>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [toolMenu, setToolMenu] = useState<{ x: number; y: number; group: 'plan' | 'analyse' } | null>(null)
   const [composition, setComposition] = useState(false)
   const [binderOpen, setBinderOpen] = useState(window.innerWidth > (matchMedia('(pointer: coarse)').matches ? 1000 : 900))
   const [inspectorOpen, setInspectorOpen] = useState(window.innerWidth > 1200)
@@ -130,7 +133,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
 
   if (!project || !nodes) return <div className="loading">Abrindo…</div>
 
-  const ws: WS = { project, nodes, byId, selectedId, select, folderView, setFolderView: v => { setFolderView(v); db.kv.put({ key: 'folderView', value: v }) }, tool, setTool, composition, setComposition, addNode, trashNode, recordWords }
+  const ws: WS = { project, nodes, byId, selectedId, select, folderView, setFolderView: v => { setFolderView(v); db.kv.put({ key: 'folderView', value: v }) }, tool, setTool: (t: Tool) => { if (t === 'search') setSearchQuery(''); setTool(t) }, composition, setComposition, addNode, trashNode, recordWords, searchQuery, openSearch: (q: string) => { setSearchQuery(q); setTool('search') } }
 
   const syncLabel: Record<SyncState, [string, string]> = { off: ['☁', 'Conectar Drive'], idle: ['☁', 'Sincronizado'], syncing: ['⟳', 'Sincronizando…'], error: ['⚠', 'Erro ao sincronizar'], login: ['☁', 'Entrar no Google'] }
 
@@ -141,10 +144,9 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
         <button className={'icon' + (binderOpen ? ' on' : '')} title="Estrutura (binder)" onClick={() => setBinderOpen(o => !o)}>☰</button>
         <h1 className="ptitle" title={project.title}>{project.title}</h1>
         <nav className="tools">
-          <button onClick={() => setTool('search')} title="Buscar e substituir (Ctrl+Shift+F)">🔍<span>Buscar</span></button>
-          <button onClick={() => setTool('timeline')} className={tool === 'timeline' ? 'on' : ''}>🕰<span>Linha do tempo</span></button>
-          <button onClick={() => setTool('relations')} className={tool === 'relations' ? 'on' : ''}>🕸<span>Relações</span></button>
-          <button onClick={() => setTool('stats')} className={tool === 'stats' ? 'on' : ''}>🎯<span>Metas</span></button>
+          <button onClick={() => { setSearchQuery(''); setTool('search') }} title="Buscar no projeto">🔍<span>Buscar</span></button>
+          <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'plan' }) }} className={['timeline', 'relations', 'grid', 'structure'].includes(tool || '') ? 'on' : ''}>🗺<span>Planejar ▾</span></button>
+          <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'analyse' }) }} className={['stats', 'style'].includes(tool || '') ? 'on' : ''}>📊<span>Analisar ▾</span></button>
           <button onClick={() => setTool('names')}>🎲<span>Nomes</span></button>
           <button onClick={() => setTool('compile')}>📕<span>Exportar</span></button>
           <button onClick={() => setTool('settings')}>⚙<span>Ajustes</span></button>
@@ -157,11 +159,21 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
         {!composition && binderOpen && (vw <= 900 || (vw <= 1000 && matchMedia('(pointer: coarse)').matches)) && <div className="scrim" onClick={() => setBinderOpen(false)} />}
         {!composition && inspectorOpen && vw <= 1200 && <div className="scrim insp-scrim" onClick={() => setInspectorOpen(false)} />}
         <main className="main-pane">
-          {tool && ['timeline', 'relations', 'stats'].includes(tool) ? <Tools /> : <MainView />}
+          {tool && PANE_TOOLS.includes(tool) ? <Tools /> : <MainView />}
         </main>
         {!composition && inspectorOpen && <aside className="inspector-pane"><Inspector onClose={() => setInspectorOpen(false)} /></aside>}
       </div>
-      {tool && !['timeline', 'relations', 'stats'].includes(tool) && <Tools />}
+      {tool && !PANE_TOOLS.includes(tool) && <Tools />}
+      {toolMenu && <Menu x={toolMenu.x} y={toolMenu.y} onClose={() => setToolMenu(null)} items={toolMenu.group === 'plan' ? [
+        { label: '🕰 Linha do tempo', onClick: () => setTool('timeline') },
+        { label: '🧵 Grade de enredo (linhas narrativas)', onClick: () => setTool('grid') },
+        { label: '🏛 Estrutura narrativa (batidas)', onClick: () => setTool('structure') },
+        { label: '🕸 Mapa de relações', onClick: () => setTool('relations') }
+      ] : [
+        { label: '🎯 Metas e estatísticas', onClick: () => setTool('stats') },
+        { label: '🔬 Análise de estilo', onClick: () => setTool('style') },
+        { label: '📋 Análise do manuscrito (anotação)', onClick: () => { const n = nodes.find(x => !x.deleted && x.kind === 'note' && /análise/i.test(x.title)); if (n) select(n.id) } }
+      ]} />}
     </div>
   </WSContext.Provider>
 }

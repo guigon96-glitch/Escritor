@@ -34,6 +34,22 @@ O APK é assinado com `android/app/tinteiro.keystore` (incluída no repositório
 compatíveis). Para usar uma chave privada, gere outra e cadastre em *Settings → Secrets → Actions* o segredo
 `ANDROID_KEYSTORE_BASE64` (e, se mudar as senhas, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`).
 
+## Atualizações
+
+Cada envio para a branch `main` gera uma versão `v0.3.N` em Releases, com a lista de novidades.
+
+- **Windows:** o app verifica ao abrir e a cada 4 h, baixa sozinho e mostra “Reiniciar e atualizar”.
+- **Android:** o app avisa “Nova versão disponível” → **Baixar e instalar** abre o download do APK; toque em *Atualizar*.
+- Em **Ajustes → Sobre e atualizações** dá para ver a versão e procurar atualização na hora.
+
+## Ferramentas
+
+Planejar: linha do tempo (vertical ou horizontal com faixas por personagem/lugar), grade de enredo (linhas narrativas × capítulos),
+estrutura narrativa (Três atos, Save the Cat, Jornada do Herói, Sete pontos) e mapa de relações.
+Analisar: metas/estatísticas e análise de estilo (repetições, frases longas, diálogo, advérbios).
+Manuscrito: cartões, tabela, texto contínuo e quadro por status. Exporta Word, EPUB, PDF, Markdown e texto.
+No editor, nomes de personagens e lugares ficam sublinhados — toque para ver a ficha.
+
 ## Configurar o Google Drive (uma vez)
 
 Você cria **duas credenciais no mesmo projeto do Google**: “Aplicativo da Web” (usada pelo tablet/site) e

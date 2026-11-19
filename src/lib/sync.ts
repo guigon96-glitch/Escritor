@@ -94,6 +94,10 @@ interface NativeBridge {
   driveLogin(clientId: string, clientSecret: string): Promise<{ access_token: string; expires_in: number }>
   driveToken(): Promise<{ access_token: string; expires_in: number } | null>
   driveLogout(): Promise<boolean>
+  appVersion?(): Promise<string>
+  updateCheck?(): Promise<boolean>
+  updateInstall?(): Promise<void>
+  onUpdate?(cb: (d: unknown) => void): () => void
 }
 
 declare global {

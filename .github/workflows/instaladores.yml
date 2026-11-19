@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+env:
+  APP_VERSION: 0.3.${{ github.run_number }}
 jobs:
   windows:
     runs-on: windows-latest
@@ -16,14 +18,20 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Definir versão
+        run: npm version ${{ env.APP_VERSION }} --no-git-tag-version --allow-same-version
       - name: Gerar instalador .exe
         run: npm run dist:win
         env:
+          VITE_APP_VERSION: ${{ env.APP_VERSION }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
 
   android:
     runs-on: ubuntu-latest
@@ -38,6 +46,8 @@ jobs:
       - run: npm ci
       - name: Gerar o app web e copiar para o Android
         run: npm run build && npx cap sync android
+        env:
+          VITE_APP_VERSION: ${{ env.APP_VERSION }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -51,7 +61,7 @@ jobs:
         run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.2.${{ github.run_number }}
+          VERSION_NAME: ${{ env.APP_VERSION }}
       - run: cp android/app/build/outputs/apk/release/app-release.apk Tinteiro.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -62,19 +72,32 @@ jobs:
     needs: [windows, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Novidades desta versão
+        run: |
+          PREV=$(git tag --sort=-creatordate | grep -E '^(v|versao-)' | head -1)
+          RANGE=${PREV:+$PREV..HEAD}
+          {
+            echo "## Novidades"
+            git log ${RANGE:--15} --no-merges --pretty='- %s' | grep -v -i -E '^- (merge|wip)' | head -40
+            echo
+            echo "## Como instalar"
+            echo "**Windows:** baixe \`Tinteiro-Setup-${APP_VERSION}.exe\` e execute (se o Windows avisar, clique em Mais informações → Executar assim mesmo). Depois desta versão, o app se atualiza sozinho."
+            echo
+            echo "**Tablet Android:** baixe \`Tinteiro.apk\` no tablet e abra. O próprio app avisa quando houver versão nova."
+          } > notes.md
+          cat notes.md
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          name: Tinteiro — versão ${{ github.run_number }}
-          tag_name: versao-${{ github.run_number }}
+          name: Tinteiro ${{ env.APP_VERSION }}
+          tag_name: v${{ env.APP_VERSION }}
           target_commitish: ${{ github.sha }}
           make_latest: true
+          body_path: notes.md
           files: out/*
-          body: |
-            ## Como instalar
-            **Windows:** baixe `Tinteiro-Setup-*.exe` e execute. Se o Windows mostrar “O Windows protegeu o computador”, clique em **Mais informações → Executar assim mesmo** (o app não é assinado por uma empresa).
-
-            **Tablet Android:** baixe `Tinteiro.apk` no tablet e abra. Permita “instalar apps desconhecidos” para o navegador/arquivos quando o Android pedir. O app funciona offline e não precisa do site.

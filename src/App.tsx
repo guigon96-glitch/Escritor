@@ -3,6 +3,7 @@ import { db } from './lib/db'
 import ProjectList from './components/ProjectList'
 import Workspace from './components/Workspace'
 import { Toaster } from './components/ui'
+import { UpdateBanner } from './components/Updates'
 
 export default function App() {
   const [projectId, setProjectId] = useState<string | null | undefined>(undefined)
@@ -24,6 +25,7 @@ export default function App() {
   if (projectId === undefined) return null
   return <>
     {projectId ? <Workspace key={projectId} projectId={projectId} onExit={() => open(null)} /> : <ProjectList onOpen={open} />}
+    <UpdateBanner />
     <Toaster />
   </>
 }

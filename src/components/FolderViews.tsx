@@ -17,6 +17,7 @@ function ViewSwitch() {
     {b('corkboard', '🗂 Cartões', 'Quadro de cortiça: cada cena é um cartão com sinopse')}
     {b('outliner', '☷ Tabela', 'Esboço em tabela com metadados')}
     {b('scrivenings', '📜 Texto contínuo', 'Lê e edita todas as cenas da pasta em sequência')}
+    {b('kanban', '🗃 Quadro', 'Quadro por status: acompanhe a revisão de cada cena')}
   </div>
 }
 
@@ -43,6 +44,7 @@ export default function FolderViews({ node }: { node: BNode }) {
     {folderView === 'corkboard' && <Corkboard parent={node} />}
     {folderView === 'outliner' && <Outliner parent={node} />}
     {folderView === 'scrivenings' && <Scrivenings parent={node} />}
+    {folderView === 'kanban' && <Kanban parent={node} />}
   </div>
 }
 
@@ -170,5 +172,40 @@ function Scrivenings({ parent }: { parent: BNode }) {
           <SceneEditor node={n} />
         </section>)}
     </div>
+  </div>
+}
+
+/* ---------------- Quadro por status (Kanban) ---------------- */
+function Kanban({ parent }: { parent: BNode }) {
+  const { nodes, select, project, byId } = useWS()
+  const scenes = descendants(nodes, parent.id).filter(n => n.kind === 'text')
+  const cols = ['', ...project.statuses]
+  const [drag, setDrag] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)
+  const label = (id: string) => project.labels.find(l => l.id === id)
+  const move = (n: BNode, d: -1 | 1) => {
+    const i = cols.indexOf(n.status || '')
+    const t = cols[Math.max(0, Math.min(cols.length - 1, i + d))]
+    if (t !== (n.status || '')) updateNode(n.id, { status: t })
+  }
+  return <div className="kanban">
+    {cols.map(st => {
+      const list = scenes.filter(n => (n.status || '') === st)
+      const words = list.reduce((s, n) => s + wordsOf(n), 0)
+      return <div key={st || 'none'} className={'kb-col' + (over === st ? ' over' : '')}
+        onDragOver={e => { e.preventDefault(); setOver(st) }} onDragLeave={() => setOver(o => o === st ? null : o)}
+        onDrop={e => { e.preventDefault(); if (drag) updateNode(drag, { status: st }); setDrag(null); setOver(null) }}>
+        <div className="kb-head"><strong>{st || 'Sem status'}</strong><small className="muted">{list.length} · {fmt(words)} pal.</small></div>
+        {list.map(n => {
+          const l = label(n.labelId)
+          const ch = n.parentId ? byId.get(n.parentId) : undefined
+          return <div key={n.id} className="kb-card" draggable onDragStart={() => setDrag(n.id)} onDragEnd={() => setDrag(null)} style={{ borderLeftColor: l?.color || 'var(--line)' }}>
+            <div className="kb-title" onClick={() => select(n.id)}>{n.title}</div>
+            <small className="muted">{ch && ch.kind !== 'root' ? ch.title.replace(/^Capítulo\s+(\d+).*/i, 'Cap. $1') + ' · ' : ''}{fmt(wordsOf(n))} pal.</small>
+            <div className="kb-move"><button className="icon" title="Status anterior" onClick={() => move(n, -1)}>◀</button><button className="icon" title="Próximo status" onClick={() => move(n, 1)}>▶</button></div>
+          </div>
+        })}
+      </div>
+    })}
   </div>
 }

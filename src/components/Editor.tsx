@@ -11,6 +11,8 @@ import { blankNode, db, now, today, updateNode, type BNode } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { countWords, fmt, readingTime, roleOf } from '../lib/util'
 import { Progress, toast } from './ui'
+import { CodexHighlight, buildTerms, codexKey, type CodexTerms } from '../lib/codex'
+import { templateFor } from '../lib/templates'
 
 export const FONTS = ['Literata', 'Georgia', 'Times New Roman', 'Garamond', 'Palatino Linotype', 'Inter', 'Arial', 'Courier New']
 
@@ -122,6 +124,13 @@ export default function Editor({ node }: { node: BNode }) {
   const [, force] = useState(0)
   const role = roleOf(nodes, node)
   const todayStat = useLiveQuery(() => db.stats.get(`${project.id}:${today()}`), [project.id])
+  const [codexOn, setCodexOn] = useState(s.codex !== false)
+  const [pop, setPop] = useState<{ id: string; x: number; y: number } | null>(null)
+  const entities = useMemo(() => nodes.filter(n => !n.deleted && (n.kind === 'character' || n.kind === 'world') && ['characters', 'world'].includes(roleOf(nodes, n) || '')), [nodes])
+  const terms = useRef<CodexTerms | null>(null)
+  const termsKey = entities.map(e => e.id + e.title + e.aliases).join('|')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  terms.current = useMemo(() => codexOn ? buildTerms(entities) : null, [termsKey, codexOn])
   const typewriter = useRef(s.typewriter)
   typewriter.current = s.typewriter
 
@@ -142,7 +151,8 @@ export default function Editor({ node }: { node: BNode }) {
       Typography.configure({ openDoubleQuote: '“', closeDoubleQuote: '”', openSingleQuote: '‘', closeSingleQuote: '’' }),
       Placeholder.configure({ placeholder: role === 'manuscript' ? 'Comece a escrever…' : 'Escreva suas anotações…' }),
       CharacterCount,
-      Focus.configure({ className: 'has-focus', mode: 'shallowest' })
+      Focus.configure({ className: 'has-focus', mode: 'shallowest' }),
+      CodexHighlight.configure({ getTerms: () => terms.current })
     ],
     content: node.content || '',
     editorProps: {
@@ -233,13 +243,18 @@ export default function Editor({ node }: { node: BNode }) {
     '--ed-width': s.pageWidth + 'px'
   }) as React.CSSProperties, [s])
 
+  // recalcula destaques quando a enciclopédia muda ou o recurso é ligado/desligado
+  useEffect(() => { if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(codexKey, true)) }, [editor, termsKey, codexOn])
+
   if (!editor) return null
   const today_ = todayStat ? Math.max(0, todayStat.endWords - todayStat.startWords) : 0
   const btn = (label: string, active: boolean, onClick: () => void, title?: string) =>
     <button className={active ? 'on' : ''} title={title} onMouseDown={e => e.preventDefault()} onClick={onClick}>{label}</button>
   const blockType = editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p'
 
-  return <div className={'editor-wrap' + (s.indent ? ' indent' : '') + (focusPara ? ' focus-para' : '')} style={style}>
+  const popNode = pop ? nodes.find(n => n.id === pop.id) : undefined
+
+  return <div className={'editor-wrap' + (codexOn ? ' codex-on' : '') + (s.indent ? ' indent' : '') + (focusPara ? ' focus-para' : '')} style={style}>
     <div className="ed-toolbar">
       {btn('↶', false, () => editor.chain().focus().undo().run(), 'Desfazer (Ctrl+Z)')}
       {btn('↷', false, () => editor.chain().focus().redo().run(), 'Refazer (Ctrl+Y)')}
@@ -272,6 +287,7 @@ export default function Editor({ node }: { node: BNode }) {
       {btn('A−', false, () => setSetting({ fontSize: Math.max(12, s.fontSize - 1) }), 'Diminuir fonte')}
       {btn('A+', false, () => setSetting({ fontSize: Math.min(32, s.fontSize + 1) }), 'Aumentar fonte')}
       {btn('⌨', s.typewriter, () => setSetting({ typewriter: !s.typewriter }), 'Rolagem de máquina de escrever: a linha atual fica sempre no meio da tela')}
+      {btn('📇', codexOn, () => { setCodexOn(!codexOn); setSetting({ codex: !codexOn }) }, 'Destacar nomes de personagens e do mundo (toque no nome para ver a ficha)')}
       {btn('◐', focusPara, () => setFocusPara(f => !f), 'Foco no parágrafo: esmaece o resto do texto')}
       {btn(composition ? '⤡' : '⤢', composition, () => setComposition(!composition), 'Modo composição / tela cheia (F11)')}
     </div>
@@ -279,7 +295,21 @@ export default function Editor({ node }: { node: BNode }) {
     <div className="ed-scroll" ref={scroller} onClick={e => { if (e.target === e.currentTarget) editor.commands.focus('end') }}>
       <div className="page">
         <input className="doc-title" value={node.title} onChange={e => updateNode(node.id, { title: e.target.value })} placeholder="Título" />
-        <EditorContent editor={editor} />
+        <div onClick={e => {
+          const el = (e.target as HTMLElement).closest<HTMLElement>('.codex')
+          if (!el) { setPop(null); return }
+          const r = el.getBoundingClientRect()
+          const host = (e.currentTarget as HTMLElement).closest('.page')!.getBoundingClientRect()
+          setPop({ id: el.dataset.codex!, x: Math.min(r.left - host.left, host.width - 300), y: r.bottom - host.top + 6 })
+        }}><EditorContent editor={editor} /></div>
+        {pop && popNode && <div className="codex-pop" style={{ left: Math.max(8, pop.x), top: pop.y }}>
+          <div className="row">
+            {popNode.image ? <img src={popNode.image} alt="" /> : <span className="avatar">{popNode.kind === 'character' ? '👤' : templateFor(popNode.template)?.icon || '📘'}</span>}
+            <div><strong>{popNode.title}</strong><br /><small className="muted">{popNode.kind === 'character' ? [popNode.fields.role, popNode.fields.age && popNode.fields.age.length < 12 ? popNode.fields.age + ' anos' : ''].filter(Boolean).join(' · ') : templateFor(popNode.template)?.name}</small></div>
+          </div>
+          {(popNode.fields.concept || popNode.fields.summary) && <p>{(popNode.fields.concept || popNode.fields.summary).slice(0, 220)}</p>}
+          <div className="row"><button className="primary" onMouseDown={e => e.preventDefault()} onClick={() => { flush(); ws.select(popNode.id) }}>Abrir ficha</button><button onClick={() => setPop(null)}>Fechar</button></div>
+        </div>}
         {s.typewriter && <div style={{ height: '45vh' }} />}
       </div>
     </div>

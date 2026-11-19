@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { db, now, updateNode, type BNode } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { childrenOf, download, rootByRole, safeName, wordsOf, fmt } from '../lib/util'
-import { compileDocx, compileHtml, compileText, type CompileItem, type CompileOptions } from '../lib/docx'
+import { compileDocx, compileEpub, compileHtml, compileText, type CompileItem, type CompileOptions } from '../lib/docx'
 import { FONTS } from './Editor'
 import { ensureSession, uploadBlob } from '../lib/sync'
 import { Modal, toast } from './ui'
 
-type Format = 'docx' | 'pdf' | 'md' | 'txt'
+type Format = 'docx' | 'epub' | 'pdf' | 'md' | 'txt'
 
 const stripAnnotations = (html: string) => html.replace(/<mark\b[^>]*>[\s\S]*?<\/mark>/g, '')
 
@@ -44,6 +44,7 @@ export default function Compile({ onClose }: { onClose: () => void }) {
       const base = safeName(o.title)
       let blob: Blob, name: string, mime: string
       if (fmtSel === 'docx') { blob = await compileDocx(items, o); name = base + '.docx'; mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+      else if (fmtSel === 'epub') { blob = await compileEpub(items, o); name = base + '.epub'; mime = 'application/epub+zip' }
       else if (fmtSel === 'pdf') {
         const html = compileHtml(items, o)
         if (!toDrive) {
@@ -85,7 +86,7 @@ export default function Compile({ onClose }: { onClose: () => void }) {
       <div>
         <h4>Formato</h4>
         <div className="seg">
-          {([['docx', 'Word (.docx)'], ['pdf', 'PDF (imprimir)'], ['md', 'Markdown'], ['txt', 'Texto']] as [Format, string][]).filter(([k]) => !(k === 'pdf' && window.tinteiroNative?.platform === 'android')).map(([k, l]) => <button key={k} className={fmtSel === k ? 'on' : ''} onClick={() => setFmt(k)}>{l}</button>)}
+          {([['docx', 'Word (.docx)'], ['epub', 'E-book (.epub)'], ['pdf', 'PDF (imprimir)'], ['md', 'Markdown'], ['txt', 'Texto']] as [Format, string][]).filter(([k]) => !(k === 'pdf' && window.tinteiroNative?.platform === 'android')).map(([k, l]) => <button key={k} className={fmtSel === k ? 'on' : ''} onClick={() => setFmt(k)}>{l}</button>)}
         </div>
         <h4>Página</h4>
         <div className="grid2">

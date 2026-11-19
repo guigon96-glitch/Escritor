@@ -47,6 +47,7 @@ function SceneMeta({ n, manuscript }: { n: BNode; manuscript: boolean }) {
       </label>
       <label>Personagens na cena<MultiPick options={characters} value={n.characterIds} placeholder="+ adicionar" onChange={v => updateNode(n.id, { characterIds: v })} /></label>
       <label>Lugares / elementos do mundo<MultiPick options={places} value={n.locationIds} placeholder="+ adicionar" onChange={v => updateNode(n.id, { locationIds: v })} /></label>
+      {(project.threads || []).length > 0 && <label>Linhas narrativas<MultiPick options={(project.threads || []).map(t => ({ id: t.id, title: t.name }))} value={n.threadIds || []} placeholder="+ linha" onChange={v => updateNode(n.id, { threadIds: v })} /></label>}
       <label>Data / momento na história<LazyInput value={n.storyDate} placeholder="Ex.: Dia 3, manhã · Ano 1042" onCommit={v => updateNode(n.id, { storyDate: v })} /></label>
       {n.kind === 'text' && <div className="grid2">
         <label>Meta de palavras<LazyInput type="number" value={String(n.wordTarget || '')} onCommit={v => updateNode(n.id, { wordTarget: +v || 0 })} /></label>

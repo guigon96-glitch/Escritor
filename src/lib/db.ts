@@ -4,6 +4,7 @@ export type RootRole = 'manuscript' | 'characters' | 'world' | 'timeline' | 'res
 export type NodeKind = 'root' | 'folder' | 'text' | 'character' | 'world' | 'map' | 'note' | 'research'
 
 export interface Label { id: string; name: string; color: string }
+export interface Thread { id: string; name: string; color: string }
 
 export interface ProjectSettings {
   fontFamily: string
@@ -14,6 +15,7 @@ export interface ProjectSettings {
   theme: 'claro' | 'sepia' | 'escuro'
   typewriter: boolean
   sceneSeparator: string
+  codex?: boolean
 }
 
 export interface Project {
@@ -28,6 +30,8 @@ export interface Project {
   sessionGoal: number
   labels: Label[]
   statuses: string[]
+  threads?: Thread[]
+  beats?: Record<string, Record<string, string>>
   settings: ProjectSettings
   driveFileId?: string
   lastSync?: number
@@ -53,6 +57,7 @@ export interface BNode {
   pov: string
   characterIds: string[]
   locationIds: string[]
+  threadIds?: string[]
   storyDate: string
   includeInCompile: boolean
   wordTarget: number

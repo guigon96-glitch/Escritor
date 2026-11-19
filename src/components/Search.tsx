@@ -21,11 +21,12 @@ function replaceInHtml(html: string, re: RegExp, rep: string): { html: string; n
   return { html: doc.body.firstElementChild!.innerHTML, n }
 }
 
-export default function Search({ onClose }: { onClose: () => void }) {
+export default function Search({ onClose, initial = '' }: { onClose: () => void; initial?: string }) {
   const { nodes, select } = useWS()
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initial)
+  const [whole0] = useState(!!initial)
   const [rep, setRep] = useState('')
-  const [whole, setWhole] = useState(false)
+  const [whole, setWhole] = useState(whole0)
   const [matchCase, setMatchCase] = useState(false)
   const [scope, setScope] = useState<'all' | 'manuscript'>('all')
   const [confirm, setConfirm] = useState(false)

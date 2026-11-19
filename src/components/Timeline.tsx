@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, now, uid, type TimelineEvent } from '../lib/db'
 import { useWS } from '../lib/ctx'
@@ -13,6 +13,10 @@ export default function Timeline() {
   const [edit, setEdit] = useState<TimelineEvent | null>(null)
   const [who, setWho] = useState('')
   const [showScenes, setShowScenes] = useState(true)
+  const [view, setView] = useState<'vertical' | 'horizontal'>('vertical')
+  const [lanes, setLanes] = useState<'personagens' | 'lugares' | 'unica'>('personagens')
+  useEffect(() => { db.kv.get('tlView').then(kv => kv?.value && setView(kv.value as 'vertical' | 'horizontal')) }, [])
+  const changeView = (v: 'vertical' | 'horizontal') => { setView(v); db.kv.put({ key: 'tlView', value: v }) }
   const chars = nodes.filter(n => n.kind === 'character' && !n.deleted && roleOf(nodes, n) === 'characters').map(n => ({ id: n.id, title: n.title }))
   const places = nodes.filter(n => (n.kind === 'world' || n.kind === 'map') && !n.deleted && roleOf(nodes, n) === 'world').map(n => ({ id: n.id, title: n.title }))
   const ms = rootByRole(nodes, 'manuscript')
@@ -42,11 +46,19 @@ export default function Timeline() {
       <div><h2>🕰 Linha do tempo</h2><span className="muted">A cronologia da história (não a ordem do livro). Use para flashbacks, idades e eventos do passado.</span></div>
       <div className="row wrap">
         <select value={who} onChange={e => setWho(e.target.value)}><option value="">Todos os personagens</option>{chars.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
-        <label className="inline"><input type="checkbox" checked={showScenes} onChange={e => setShowScenes(e.target.checked)} /> mostrar cenas com data</label>
+        <div className="seg">
+          <button className={view === 'vertical' ? 'on' : ''} onClick={() => changeView('vertical')}>↕ Vertical</button>
+          <button className={view === 'horizontal' ? 'on' : ''} onClick={() => changeView('horizontal')}>↔ Horizontal</button>
+        </div>
+        {view === 'horizontal' && <select value={lanes} onChange={e => setLanes(e.target.value as typeof lanes)} title="Faixas">
+          <option value="personagens">Faixas por personagem</option><option value="lugares">Faixas por lugar</option><option value="unica">Faixa única</option>
+        </select>}
+        {view === 'vertical' && <label className="inline"><input type="checkbox" checked={showScenes} onChange={e => setShowScenes(e.target.checked)} /> mostrar cenas com data</label>}
         <button className="primary" onClick={add}>＋ Evento</button>
       </div>
     </div>
-    <div className="tl">
+    {view === 'horizontal' && <HorizontalTimeline events={shown} lanes={lanes} onEdit={setEdit} onSwap={(e, d) => swap(events.indexOf(e), d)} />}
+    {view === 'vertical' && <div className="tl">
       {shown.length === 0 && <p className="muted">Nenhum evento ainda.</p>}
       {shown.map((e) => {
         const i = events.indexOf(e)
@@ -68,8 +80,8 @@ export default function Timeline() {
           </div>
         </div>
       })}
-    </div>
-    {showScenes && datedScenes.length > 0 && <>
+    </div>}
+    {view === 'vertical' && showScenes && datedScenes.length > 0 && <>
       <h3 className="group-title">Cenas com “data na história” (pelo Inspetor)</h3>
       <table className="outliner"><tbody>
         {datedScenes.map(s => <tr key={s.id}><td style={{ width: 200 }}><b>{s.storyDate}</b></td><td><button className="linkish" onClick={() => select(s.id)}>{s.title}</button></td><td className="muted">{s.synopsis}</td></tr>)}
@@ -87,5 +99,47 @@ export default function Timeline() {
       <label>Lugares<MultiPick options={places} value={edit.locationIds} placeholder="+ lugar" onChange={v => save(edit.id, { locationIds: v })} /></label>
       <label>Cenas relacionadas<MultiPick options={sceneOpts} value={edit.nodeIds} placeholder="+ cena" onChange={v => save(edit.id, { nodeIds: v })} /></label>
     </Modal>}
+  </div>
+}
+
+function HorizontalTimeline({ events, lanes, onEdit, onSwap }: { events: TimelineEvent[]; lanes: 'personagens' | 'lugares' | 'unica'; onEdit: (e: TimelineEvent) => void; onSwap: (e: TimelineEvent, d: -1 | 1) => void }) {
+  const { nodes, select } = useWS()
+  const title = (id: string) => nodes.find(n => n.id === id)?.title || '?'
+  const keyOf = (e: TimelineEvent) => lanes === 'personagens' ? e.characterIds : lanes === 'lugares' ? e.locationIds : ['*']
+  // faixas na ordem de mais eventos
+  const count = new Map<string, number>()
+  events.forEach(e => keyOf(e).forEach(k => count.set(k, (count.get(k) || 0) + 1)))
+  const laneIds = [...count.keys()].sort((a, b) => (count.get(b)! - count.get(a)!))
+  const orphans = events.some(e => keyOf(e).length === 0)
+  const rows: { id: string; label: string; image?: string }[] = [
+    ...laneIds.map(id => ({ id, label: id === '*' ? 'Linha do tempo' : title(id), image: nodes.find(n => n.id === id)?.image })),
+    ...(orphans ? [{ id: '', label: lanes === 'personagens' ? 'Sem personagem' : 'Sem lugar' }] : [])
+  ]
+  if (!events.length) return <p className="muted">Nenhum evento ainda.</p>
+  const cols = `minmax(130px, 170px) repeat(${events.length}, minmax(170px, 210px))`
+  return <div className="htl-wrap">
+    <div className="htl" style={{ gridTemplateColumns: cols }}>
+      <div className="htl-corner" />
+      {events.map(e => <div key={e.id} className="htl-head">
+        <div className="htl-axis"><span className="htl-dot" style={{ background: e.color }} /></div>
+        <div className="htl-date" title={e.date}>{e.date || 'sem data'}</div>
+        <div className="htl-move"><button className="icon" title="Mais cedo" onClick={() => onSwap(e, -1)}>◀</button><button className="icon" title="Mais tarde" onClick={() => onSwap(e, 1)}>▶</button></div>
+      </div>)}
+      {rows.map(r => <div key={r.id} className="htl-row" style={{ display: 'contents' }}>
+        <div className="htl-lane" onClick={() => r.id && r.id !== '*' && select(r.id)}>
+          {r.image ? <img src={r.image} alt="" /> : <span className="avatar">{r.label[0]}</span>}<span>{r.label}</span>
+        </div>
+        {events.map(e => {
+          const k = keyOf(e)
+          const hit = r.id === '' ? k.length === 0 : k.includes(r.id)
+          return <div key={e.id} className={'htl-cell' + (hit ? ' hit' : '')}>
+            {hit && <div className="htl-card" style={{ borderTopColor: e.color }} onClick={() => onEdit(e)}>
+              <strong>{e.title}</strong>
+              {e.description && <p>{e.description.length > 90 ? e.description.slice(0, 90) + '…' : e.description}</p>}
+            </div>}
+          </div>
+        })}
+      </div>)}
+    </div>
   </div>
 }

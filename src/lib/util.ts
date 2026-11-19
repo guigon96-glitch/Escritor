@@ -77,7 +77,7 @@ export function download(name: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
 }
 
-export function safeName(s: string) { return s.replace(/[\\/:*?"<>|]+/g, '').trim() || 'livro' }
+export function safeName(s: string) { return s.replace(/[\\/:*?"<>|]+/g, '').replace(/[—–]/g, '-').trim() || 'livro' }
 
 /** Resize an image file to a JPEG data URL so projects stay small enough to sync. */
 export function imageToDataUrl(file: File, max = 1400, quality = 0.85): Promise<string> {
