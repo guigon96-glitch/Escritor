@@ -1,6 +1,6 @@
 // Tinteiro — app de desktop (Windows). Carrega os arquivos do app localmente (funciona offline)
 // e faz o login do Google Drive pelo navegador do sistema (fluxo OAuth "app instalado" com PKCE).
-const { app, BrowserWindow, protocol, net, ipcMain, shell, safeStorage, Menu } = require('electron')
+const { app, BrowserWindow, protocol, net, ipcMain, shell, safeStorage, Menu, session } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const http = require('node:http')
@@ -64,9 +64,26 @@ app.whenReady().then(() => {
     if (!file.startsWith(DIST)) return new Response('Not found', { status: 404 })
     return net.fetch(pathToFileURL(file).toString())
   })
+  setupConsulta()
   createWindow()
   setupUpdater()
 })
+
+/* ---------------- Painel Consulta (<webview>) ---------------- */
+// Google e Claude recusam login em navegador embutido que se identifica como Electron:
+// a sessão da Consulta se apresenta como um Chrome comum e guarda os cookies entre aberturas.
+function setupConsulta() {
+  session.fromPartition('persist:consulta').setUserAgent(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`)
+  app.on('web-contents-created', (_e, wc) => {
+    if (wc.getType() !== 'webview') return
+    // Links "abrir em nova aba" ficam no próprio painel; pop-ups de login (Google etc.) abrem numa janela.
+    wc.setWindowOpenHandler(({ url, disposition }) => {
+      if (disposition === 'new-window') return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, width: 520, height: 700 } }
+      wc.loadURL(url)
+      return { action: 'deny' }
+    })
+  })
+}
 
 /* ---------------- Atualização automática (GitHub Releases) ---------------- */
 function sendUpdate(status, data = {}) {

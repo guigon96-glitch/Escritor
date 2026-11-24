@@ -69,7 +69,7 @@ export default function Browser({ onClose }: { onClose: () => void }) {
       ? favs.map(f => ({ label: '★ ' + f.title, onClick: () => { setInput(f.url); go(f.url) } }))
       : [{ label: 'Nenhum favorito ainda — use ☆ para adicionar', onClick: () => {} }]} />}
     {desktop
-      ? <webview ref={view} src={url} className="browser-view" />
+      ? <webview ref={view} src={url} partition="persist:consulta" allowpopups={"true" as any} className="browser-view" />
       : <iframe key={url} src={url} className="browser-view" title="Consulta" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />}
   </div>
 }
