@@ -13,6 +13,7 @@ import Compile from './Compile'
 import Search from './Search'
 import DriveSetup from './DriveSetup'
 import { FONTS } from './Editor'
+import { CUSTOM_COLORS, THEMES } from '../lib/themes'
 import { LazyInput, Modal, toast } from './ui'
 import { AboutUpdates } from './Updates'
 
@@ -96,11 +97,28 @@ function Settings({ onClose }: { onClose: () => void }) {
           <label>Tamanho<input type="number" value={s.fontSize} onChange={e => ss({ fontSize: +e.target.value || 18 })} /></label>
           <label>Entrelinha<input type="number" step={0.1} value={s.lineHeight} onChange={e => ss({ lineHeight: +e.target.value || 1.6 })} /></label>
           <label>Largura da página<input type="range" min={480} max={1100} value={s.pageWidth} onChange={e => ss({ pageWidth: +e.target.value })} /></label>
-          <label>Tema<select value={s.theme} onChange={e => ss({ theme: e.target.value as typeof s.theme })}><option value="claro">Claro</option><option value="sepia">Sépia (papel)</option><option value="escuro">Escuro</option></select></label>
           <label>Separador de cena<input value={s.sceneSeparator} onChange={e => ss({ sceneSeparator: e.target.value })} /></label>
         </div>
         <label className="inline"><input type="checkbox" checked={s.indent} onChange={e => ss({ indent: e.target.checked })} /> Recuo de parágrafo (estilo livro)</label>
         <label className="inline"><input type="checkbox" checked={s.typewriter} onChange={e => ss({ typewriter: e.target.checked })} /> Rolagem de máquina de escrever</label>
+      </section>
+      <section>
+        <h4>Aparência</h4>
+        <div className="theme-grid">
+          {THEMES.map(t => <button key={t.key} className={'theme-card' + (s.theme === t.key ? ' on' : '')} onClick={() => ss({ theme: t.key })}>
+            <span className={`theme-prev theme-${t.key}`} style={{ background: t.swatch[0] }}>
+              <span className="tp-page" style={{ background: t.swatch[1], color: t.swatch[2] }}>Aa<i style={{ background: t.swatch[3] }} /></span>
+            </span>
+            <span>{t.name}</span>
+          </button>)}
+        </div>
+        <h4>Cores personalizadas</h4>
+        <div className="row wrap">
+          {CUSTOM_COLORS.map(c => <label key={c.key} className="inline color-pick">
+            <input type="color" value={s.colors?.[c.key] || THEMES.find(t => t.key === s.theme)!.swatch[({ bg: 0, paper: 1, ink: 2, accent: 3, panel: 0 } as const)[c.key]]} onChange={e => ss({ colors: { ...s.colors, [c.key]: e.target.value } })} /> {c.label}
+          </label>)}
+          {s.colors && Object.keys(s.colors).length > 0 && <button onClick={() => ss({ colors: {} })}>↺ Usar as cores do tema</button>}
+        </div>
       </section>
       <section>
         <h4>Rótulos (cores das cenas)</h4>

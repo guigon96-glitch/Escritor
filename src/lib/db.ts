@@ -12,7 +12,8 @@ export interface ProjectSettings {
   lineHeight: number
   pageWidth: number
   indent: boolean
-  theme: 'claro' | 'sepia' | 'escuro'
+  theme: import('./themes').ThemeKey
+  colors?: import('./themes').CustomColors
   typewriter: boolean
   sceneSeparator: string
   codex?: boolean

@@ -58,14 +58,13 @@ export default function Timeline() {
       </div>
     </div>
     {view === 'horizontal' && <HorizontalTimeline events={shown} lanes={lanes} onEdit={setEdit} onSwap={(e, d) => swap(events.indexOf(e), d)} />}
-    {view === 'vertical' && <div className="tl">
+    {view === 'vertical' && <div className="tl2">
       {shown.length === 0 && <p className="muted">Nenhum evento ainda.</p>}
-      {shown.map((e) => {
+      {shown.map((e, j) => {
         const i = events.indexOf(e)
-        return <div key={e.id} className="tl-item">
-          <div className="tl-dot" style={{ background: e.color }} />
-          <div className="tl-card" onClick={() => setEdit(e)}>
-            <div className="tl-date">{e.date || 'sem data'}</div>
+        return <div key={e.id} className={'tl2-item ' + (j % 2 ? 'right' : 'left')}>
+          <div className="tl2-card" style={{ borderTopColor: e.color }} onClick={() => setEdit(e)}>
+            <div className="tl2-date" style={{ color: e.color }}>{e.date || 'sem data'}</div>
             <strong>{e.title}</strong>
             {e.description && <p>{e.description}</p>}
             <div className="chips small">
@@ -73,11 +72,13 @@ export default function Timeline() {
               {e.locationIds.map(id => <span key={id}>📍 {nodes.find(n => n.id === id)?.title}</span>)}
               {e.nodeIds.map(id => <span key={id} className="linkish" onClick={ev => { ev.stopPropagation(); select(id) }}>📄 {nodes.find(n => n.id === id)?.title}</span>)}
             </div>
+            <div className="tl2-move" onClick={ev => ev.stopPropagation()}>
+              <button className="icon" onClick={() => swap(i, -1)} title="Mais cedo">▲</button>
+              <button className="icon" onClick={() => swap(i, 1)} title="Mais tarde">▼</button>
+            </div>
           </div>
-          <div className="tl-move">
-            <button className="icon" onClick={() => swap(i, -1)} title="Mais cedo">▲</button>
-            <button className="icon" onClick={() => swap(i, 1)} title="Mais tarde">▼</button>
-          </div>
+          <div className="tl2-axis"><span className="tl2-num" style={{ background: e.color }}>{i + 1}</span></div>
+          <div className="tl2-spacer" />
         </div>
       })}
     </div>}
@@ -115,31 +116,44 @@ function HorizontalTimeline({ events, lanes, onEdit, onSwap }: { events: Timelin
     ...laneIds.map(id => ({ id, label: id === '*' ? 'Linha do tempo' : title(id), image: nodes.find(n => n.id === id)?.image })),
     ...(orphans ? [{ id: '', label: lanes === 'personagens' ? 'Sem personagem' : 'Sem lugar' }] : [])
   ]
+  const [zoom, setZoom] = useState(200)
+  const [hover, setHover] = useState<string | null>(null)
+  useEffect(() => { db.kv.get('tlZoom').then(kv => kv?.value && setZoom(kv.value as number)) }, [])
   if (!events.length) return <p className="muted">Nenhum evento ainda.</p>
-  const cols = `minmax(130px, 170px) repeat(${events.length}, minmax(170px, 210px))`
-  return <div className="htl-wrap">
+  const cols = `minmax(140px, 180px) repeat(${events.length}, ${zoom}px)`
+  const LANE = ['#c0392b', '#2471a3', '#17a589', '#b9770e', '#7d3c98', '#d35490', '#27ae60', '#e67e22', '#5d6d7e', '#16a085']
+  const other = (e: TimelineEvent) => lanes === 'personagens' ? e.locationIds.map(id => '📍 ' + title(id)) : lanes === 'lugares' ? e.characterIds.map(id => '👤 ' + title(id)) : [...e.characterIds.map(id => '👤 ' + title(id)), ...e.locationIds.map(id => '📍 ' + title(id))]
+  return <>
+  <label className="inline muted htl-zoom">Zoom <input type="range" min={130} max={340} value={zoom} onChange={e => { setZoom(+e.target.value); db.kv.put({ key: 'tlZoom', value: +e.target.value }) }} /></label>
+  <div className="htl-wrap">
     <div className="htl" style={{ gridTemplateColumns: cols }}>
       <div className="htl-corner" />
-      {events.map(e => <div key={e.id} className="htl-head">
-        <div className="htl-axis"><span className="htl-dot" style={{ background: e.color }} /></div>
+      {events.map((e, i) => <div key={e.id} className={'htl-head' + (hover === e.id ? ' hov' : '')} onMouseEnter={() => setHover(e.id)} onMouseLeave={() => setHover(null)}>
+        <div className="htl-axis"><span className="htl-dot" style={{ background: e.color }}>{i + 1}</span></div>
         <div className="htl-date" title={e.date}>{e.date || 'sem data'}</div>
         <div className="htl-move"><button className="icon" title="Mais cedo" onClick={() => onSwap(e, -1)}>◀</button><button className="icon" title="Mais tarde" onClick={() => onSwap(e, 1)}>▶</button></div>
       </div>)}
-      {rows.map(r => <div key={r.id} className="htl-row" style={{ display: 'contents' }}>
-        <div className="htl-lane" onClick={() => r.id && r.id !== '*' && select(r.id)}>
+      {rows.map((r, ri) => {
+        const color = r.id ? LANE[ri % LANE.length] : '#999'
+        const hits = events.map(e => r.id === '' ? keyOf(e).length === 0 : keyOf(e).includes(r.id))
+        const first = hits.indexOf(true), last = hits.lastIndexOf(true)
+        return <div key={r.id} className="htl-row" style={{ display: 'contents', ['--lane' as string]: color }}>
+        <div className="htl-lane" style={{ borderLeftColor: color }} onClick={() => r.id && r.id !== '*' && select(r.id)}>
           {r.image ? <img src={r.image} alt="" /> : <span className="avatar">{r.label[0]}</span>}<span>{r.label}</span>
         </div>
-        {events.map(e => {
-          const k = keyOf(e)
-          const hit = r.id === '' ? k.length === 0 : k.includes(r.id)
-          return <div key={e.id} className={'htl-cell' + (hit ? ' hit' : '')}>
+        {events.map((e, i) => {
+          const hit = hits[i]
+          const span = i >= first && i <= last && first !== last ? (i === first ? ' span-start' : i === last ? ' span-end' : ' span') : ''
+          return <div key={e.id} className={'htl-cell' + (hit ? ' hit' : '') + span + (hover === e.id ? ' hov' : '')} onMouseEnter={() => setHover(e.id)} onMouseLeave={() => setHover(null)}>
             {hit && <div className="htl-card" style={{ borderTopColor: e.color }} onClick={() => onEdit(e)}>
               <strong>{e.title}</strong>
-              {e.description && <p>{e.description.length > 90 ? e.description.slice(0, 90) + '…' : e.description}</p>}
+              {e.description && <p>{e.description.length > zoom / 2 ? e.description.slice(0, Math.round(zoom / 2)) + '…' : e.description}</p>}
+              {other(e).length > 0 && <div className="chips small">{other(e).slice(0, 3).map(t => <span key={t}>{t}</span>)}</div>}
             </div>}
           </div>
         })}
-      </div>)}
+      </div>})}
     </div>
   </div>
+  </>
 }

@@ -138,7 +138,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   const syncLabel: Record<SyncState, [string, string]> = { off: ['☁', 'Conectar Drive'], idle: ['☁', 'Sincronizado'], syncing: ['⟳', 'Sincronizando…'], error: ['⚠', 'Erro ao sincronizar'], login: ['☁', 'Entrar no Google'] }
 
   return <WSContext.Provider value={ws}>
-    <div className={`app theme-${project.settings.theme}${composition ? ' composing' : ''}`}>
+    <div className={`app theme-${project.settings.theme}${composition ? ' composing' : ''}`} style={Object.fromEntries(Object.entries(project.settings.colors || {}).map(([k, v]) => ['--' + k, v]))}>
       {!composition && <header className="topbar">
         <button className="icon" title="Livros" onClick={onExit}>⌂</button>
         <button className={'icon' + (binderOpen ? ' on' : '')} title="Estrutura (binder)" onClick={() => setBinderOpen(o => !o)}>☰</button>
