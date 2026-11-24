@@ -1,3 +1,5 @@
+import { htmlToText } from './util'
+import { templateFor } from './templates'
 import { db, now, today, uid, type BNode, type Project, type Relationship, type Snapshot, type StatDay, type TimelineEvent } from './db'
 
 /* ---------------- Bundle (whole project as one JSON) ---------------- */
@@ -232,9 +234,10 @@ async function findOrCreateFolder(name: string, parent?: string): Promise<string
   return id
 }
 
-async function uploadJson(meta: Record<string, unknown>, data: unknown, fileId?: string): Promise<string> {
+async function uploadJson(meta: Record<string, unknown>, data: unknown, fileId?: string, mime = MIME): Promise<string> {
   const boundary = 'tinteiro' + Math.random().toString(36).slice(2)
-  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${MIME}\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--`
+  const payload = typeof data === 'string' ? data : JSON.stringify(data)
+  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}; charset=UTF-8\r\n\r\n${payload}\r\n--${boundary}--`
   const res = await api(fileId ? `/files/${fileId}?uploadType=multipart&fields=id` : '/files?uploadType=multipart&fields=id', {
     method: fileId ? 'PATCH' : 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
@@ -293,6 +296,19 @@ export async function syncProject(projectId: string): Promise<SyncResult> {
   fileId = await uploadJson(meta, bundle, fileId)
   await db.projects.update(projectId, { driveFileId: fileId, lastSync: now() })
 
+  // cópia em texto limpo para o Claude (ou qualquer leitor) entender o livro
+  const ck = `claudeFile:${projectId}`
+  const claudeId = (await db.kv.get(ck))?.value as string | undefined
+  const md = bundleToMarkdown(bundle)
+  const cmeta: Record<string, unknown> = { name: `${bundle.project.title} — para leitura.md`, appProperties: { tinteiroText: '1', projectId } }
+  try {
+    if (!claudeId) cmeta.parents = [folder]
+    await db.kv.put({ key: ck, value: await uploadJson(cmeta, md, claudeId, 'text/markdown') })
+  } catch (e: any) {
+    if (!claudeId || !String(e.message).includes('404')) throw e
+    await db.kv.put({ key: ck, value: await uploadJson({ ...cmeta, parents: [folder] }, md, undefined, 'text/markdown') })
+  }
+
   let backup = false
   const key = `backup:${projectId}`
   if ((await db.kv.get(key))?.value !== today()) {
@@ -328,4 +344,52 @@ export async function uploadBlob(name: string, blob: Blob, mime: string): Promis
   form.append('metadata', new Blob([JSON.stringify({ name, parents: [folder] })], { type: 'application/json' }))
   form.append('file', new Blob([blob], { type: mime }))
   await api('/files?uploadType=multipart&fields=id', { method: 'POST', body: form }, true)
+}
+
+/** Livro inteiro em Markdown legível: manuscrito, fichas, mundo, linha do tempo e anotações. */
+export function bundleToMarkdown(b: Bundle): string {
+  const live = b.nodes.filter(n => !n.deleted)
+  const kids = (id: string) => live.filter(n => n.parentId === id).sort((x, y) => x.order - y.order)
+  const byId = new Map(live.map(n => [n.id, n]))
+  const root = (role: string) => live.find(n => n.kind === 'root' && n.role === role)
+  const out: string[] = [`# ${b.project.title}`, `Exportado pelo Tinteiro em ${new Date().toLocaleString('pt-BR')}. Estrutura: Manuscrito (capítulos e cenas, com metadados), Personagens, Mundo, Linha do tempo, Pesquisa e Anotações.`]
+  const sheet = (n: BNode) => {
+    const t = templateFor(n.template || (n.kind === 'character' ? 'character' : 'lore'))
+    const label = (k: string) => t?.sections.flatMap(s => s.fields).find(f => f.key === k)?.label || k
+    const lines = Object.entries(n.fields || {}).filter(([, v]) => v?.trim()).map(([k, v]) => `- **${label(k)}:** ${v.replace(/\n+/g, ' ')}`)
+    n.customFields?.filter(c => c.value).forEach(c => lines.push(`- **${c.name}:** ${c.value}`))
+    if (n.aliases) lines.unshift(`- **Também chamado:** ${n.aliases}`)
+    if (n.notes) lines.push(`- **Anotações:** ${n.notes.replace(/\n+/g, ' ')}`)
+    return lines.join('\n')
+  }
+  const walk = (id: string, depth: number, mode: 'ms' | 'codex' | 'docs') => {
+    for (const n of kids(id)) {
+      const h = '#'.repeat(Math.min(6, depth))
+      if (mode === 'ms' && n.kind === 'folder') { out.push(`${h} ${n.title}`); if (n.synopsis) out.push(`*Resumo:* ${n.synopsis}`) }
+      else if (mode === 'ms') {
+        const meta = [n.pov && `POV: ${byId.get(n.pov)?.title}`, n.status && `Status: ${n.status}`, n.storyDate && `Momento: ${n.storyDate}`,
+          n.characterIds?.length && `Personagens: ${n.characterIds.map(i => byId.get(i)?.title).filter(Boolean).join(', ')}`,
+          n.locationIds?.length && `Lugares: ${n.locationIds.map(i => byId.get(i)?.title).filter(Boolean).join(', ')}`].filter(Boolean).join(' · ')
+        out.push(`${h} Cena: ${n.title}`, meta ? `_${meta}_` : '', n.synopsis ? `*Sinopse:* ${n.synopsis}` : '', n.notes ? `*Notas do autor:* ${n.notes}` : '', htmlToText(n.content))
+      } else if (n.kind === 'folder') out.push(`${h} ${n.title}`)
+      else if (mode === 'codex') out.push(`${h} ${n.title}`, sheet(n))
+      else out.push(`${h} ${n.title}`, htmlToText(n.content))
+      walk(n.id, depth + 1, mode)
+    }
+  }
+  const sec = (role: string, title: string, mode: 'ms' | 'codex' | 'docs') => { const r = root(role); if (r) { out.push(`\n# ${title}`); walk(r.id, 2, mode) } }
+  sec('manuscript', 'Manuscrito', 'ms')
+  sec('characters', 'Personagens', 'codex')
+  sec('world', 'Mundo', 'codex')
+  if (b.events.some(e => !e.deleted)) {
+    out.push('\n# Linha do tempo')
+    b.events.filter(e => !e.deleted).sort((x, y) => x.sortKey - y.sortKey).forEach(e => out.push(`- **${e.date || 'sem data'} — ${e.title}:** ${e.description}`))
+  }
+  if (b.relationships.some(r => !r.deleted)) {
+    out.push('\n# Relações')
+    b.relationships.filter(r => !r.deleted).forEach(r => out.push(`- ${byId.get(r.from)?.title} → ${byId.get(r.to)?.title}: ${r.type}${r.description ? ` (${r.description})` : ''}`))
+  }
+  sec('notes', 'Anotações', 'docs')
+  sec('research', 'Pesquisa', 'docs')
+  return out.filter(l => l !== '').join('\n\n')
 }
