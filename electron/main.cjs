@@ -73,9 +73,24 @@ app.whenReady().then(() => {
 // Google e Claude recusam login em navegador embutido que se identifica como Electron:
 // a sessão da Consulta se apresenta como um Chrome comum e guarda os cookies entre aberturas.
 function setupConsulta() {
-  session.fromPartition('persist:consulta').setUserAgent(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`)
+  const ses = session.fromPartition('persist:consulta')
+  const CHROME = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`
+  // O login do Google recusa qualquer Chromium embutido (confere também os "client hints"),
+  // mas aceita um Firefox: só nas páginas de login nos apresentamos como Firefox, sem client hints.
+  const FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0'
+  const isGoogleLogin = u => { try { return new URL(u).hostname === 'accounts.google.com' } catch { return false } }
+  ses.setUserAgent(CHROME)
+  ses.webRequest.onBeforeSendHeaders((d, cb) => {
+    if (isGoogleLogin(d.url)) {
+      d.requestHeaders['User-Agent'] = FIREFOX
+      for (const h of Object.keys(d.requestHeaders)) if (/^sec-ch-ua/i.test(h)) delete d.requestHeaders[h]
+    }
+    cb({ requestHeaders: d.requestHeaders })
+  })
   app.on('web-contents-created', (_e, wc) => {
-    if (wc.getType() !== 'webview') return
+    if (wc.session !== ses) return
+    // navigator.userAgent da página precisa bater com o cabeçalho enviado
+    wc.on('did-start-navigation', ({ url, isMainFrame }) => { if (isMainFrame) wc.setUserAgent(isGoogleLogin(url) ? FIREFOX : CHROME) })
     // Links "abrir em nova aba" ficam no próprio painel; pop-ups de login (Google etc.) abrem numa janela.
     wc.setWindowOpenHandler(({ url, disposition }) => {
       if (disposition === 'new-window') return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, width: 520, height: 700 } }
