@@ -9,6 +9,7 @@ import Binder from './Binder'
 import MainView from './MainView'
 import Inspector from './Inspector'
 import Tools from './Tools'
+import Browser from './Browser'
 import { toast } from './ui'
 
 type SyncState = 'off' | 'idle' | 'syncing' | 'error' | 'login'
@@ -22,6 +23,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   const [searchQuery, setSearchQuery] = useState('')
   const [toolMenu, setToolMenu] = useState<{ x: number; y: number; group: 'plan' | 'analyse' } | null>(null)
   const [composition, setComposition] = useState(false)
+  const [consulta, setConsulta] = useState(false)
   const [binderOpen, setBinderOpen] = useState(window.innerWidth > (matchMedia('(pointer: coarse)').matches ? 1000 : 900))
   const [inspectorOpen, setInspectorOpen] = useState(window.innerWidth > 1200)
   const [sync, setSync] = useState<SyncState>('off')
@@ -147,6 +149,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
           <button onClick={() => { setSearchQuery(''); setTool('search') }} title="Buscar no projeto">🔍<span>Buscar</span></button>
           <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'plan' }) }} className={['timeline', 'relations', 'grid', 'structure'].includes(tool || '') ? 'on' : ''}>🗺<span>Planejar ▾</span></button>
           <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'analyse' }) }} className={['stats', 'style'].includes(tool || '') ? 'on' : ''}>📊<span>Analisar ▾</span></button>
+          <button className={consulta ? 'on' : ''} onClick={() => setConsulta(c => !c)} title="Navegador de consulta ao lado do texto">🌐<span>Consulta</span></button>
           <button onClick={() => setTool('names')}>🎲<span>Nomes</span></button>
           <button onClick={() => setTool('compile')}>📕<span>Exportar</span></button>
           <button onClick={() => setTool('settings')}>⚙<span>Ajustes</span></button>
@@ -161,6 +164,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
         <main className="main-pane">
           {tool && PANE_TOOLS.includes(tool) ? <Tools /> : <MainView />}
         </main>
+        {!composition && consulta && <aside className="browser-pane"><Browser onClose={() => setConsulta(false)} /></aside>}
         {!composition && inspectorOpen && <aside className="inspector-pane"><Inspector onClose={() => setInspectorOpen(false)} /></aside>}
       </div>
       {tool && !PANE_TOOLS.includes(tool) && <Tools />}

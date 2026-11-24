@@ -82,6 +82,11 @@ button.big { padding: 18px; font-size: 15px; border-radius: 12px; box-shadow: va
 .inspector-pane { width: 310px; flex-shrink: 0; background: var(--panel); border-left: 1px solid var(--line); overflow: auto; }
 .main-pane { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; }
 .scrim { display: none; }
+.browser-pane { width: 45%; min-width: 280px; resize: horizontal; direction: rtl; overflow: hidden; flex-shrink: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.browser { direction: ltr; display: flex; flex-direction: column; height: 100%; }
+.browser-bar { display: flex; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); }
+.browser-bar input { flex: 1; min-width: 0; }
+.browser-view { flex: 1; width: 100%; border: 0; background: #fff; }
 
 /* ---------- Binder ---------- */
 .binder { padding: 8px 6px 40px; }

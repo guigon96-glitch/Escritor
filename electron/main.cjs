@@ -33,6 +33,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true, // painel Consulta (navegador ao lado do texto)
       spellcheck: true
     }
   })

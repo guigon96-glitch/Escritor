@@ -14,7 +14,6 @@ export interface ProjectSettings {
   indent: boolean
   theme: import('./themes').ThemeKey
   colors?: import('./themes').CustomColors
-  typewriter: boolean
   sceneSeparator: string
   codex?: boolean
 }
@@ -144,7 +143,6 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   pageWidth: 720,
   indent: true,
   theme: 'sepia',
-  typewriter: false,
   sceneSeparator: '* * *'
 }
 

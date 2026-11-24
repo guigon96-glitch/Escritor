@@ -100,7 +100,6 @@ function Settings({ onClose }: { onClose: () => void }) {
           <label>Separador de cena<input value={s.sceneSeparator} onChange={e => ss({ sceneSeparator: e.target.value })} /></label>
         </div>
         <label className="inline"><input type="checkbox" checked={s.indent} onChange={e => ss({ indent: e.target.checked })} /> Recuo de parágrafo (estilo livro)</label>
-        <label className="inline"><input type="checkbox" checked={s.typewriter} onChange={e => ss({ typewriter: e.target.checked })} /> Rolagem de máquina de escrever</label>
       </section>
       <section>
         <h4>Aparência</h4>

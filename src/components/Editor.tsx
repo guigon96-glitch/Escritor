@@ -116,7 +116,6 @@ export default function Editor({ node }: { node: BNode }) {
   const s = project.settings
   const saveTimer = useRef<number>(0)
   const pending = useRef<string | null>(null)
-  const scroller = useRef<HTMLDivElement>(null)
   const [finding, setFinding] = useState(false)
   const [words, setWords] = useState(0)
   const [selWords, setSelWords] = useState(0)
@@ -131,8 +130,6 @@ export default function Editor({ node }: { node: BNode }) {
   const termsKey = entities.map(e => e.id + e.title + e.aliases).join('|')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   terms.current = useMemo(() => codexOn ? buildTerms(entities) : null, [termsKey, codexOn])
-  const typewriter = useRef(s.typewriter)
-  typewriter.current = s.typewriter
 
   const flush = useCallback(() => {
     clearTimeout(saveTimer.current)
@@ -181,13 +178,6 @@ export default function Editor({ node }: { node: BNode }) {
       const { from, to } = editor.state.selection
       setSelWords(from === to ? 0 : countWords(editor.state.doc.textBetween(from, to, ' ')))
       force(x => x + 1)
-      if (typewriter.current && scroller.current) {
-        try {
-          const c = editor.view.coordsAtPos(from)
-          const box = scroller.current.getBoundingClientRect()
-          scroller.current.scrollBy({ top: c.top - (box.top + box.height * 0.45), behavior: 'smooth' })
-        } catch { /* ignore */ }
-      }
     }
   }, [node.id])
 
@@ -286,13 +276,12 @@ export default function Editor({ node }: { node: BNode }) {
       <span className="sep" />
       {btn('A−', false, () => setSetting({ fontSize: Math.max(12, s.fontSize - 1) }), 'Diminuir fonte')}
       {btn('A+', false, () => setSetting({ fontSize: Math.min(32, s.fontSize + 1) }), 'Aumentar fonte')}
-      {btn('⌨', s.typewriter, () => setSetting({ typewriter: !s.typewriter }), 'Rolagem de máquina de escrever: a linha atual fica sempre no meio da tela')}
       {btn('📇', codexOn, () => { setCodexOn(!codexOn); setSetting({ codex: !codexOn }) }, 'Destacar nomes de personagens e do mundo (toque no nome para ver a ficha)')}
       {btn('◐', focusPara, () => setFocusPara(f => !f), 'Foco no parágrafo: esmaece o resto do texto')}
       {btn(composition ? '⤡' : '⤢', composition, () => setComposition(!composition), 'Modo composição / tela cheia (F11)')}
     </div>
     {finding && <FindBar editor={editor} onClose={() => setFinding(false)} />}
-    <div className="ed-scroll" ref={scroller} onClick={e => { if (e.target === e.currentTarget) editor.commands.focus('end') }}>
+    <div className="ed-scroll" onClick={e => { if (e.target === e.currentTarget) editor.commands.focus('end', { scrollIntoView: false }) }}>
       <div className="page">
         <input className="doc-title" value={node.title} onChange={e => updateNode(node.id, { title: e.target.value })} placeholder="Título" />
         <div onClick={e => {
@@ -310,7 +299,6 @@ export default function Editor({ node }: { node: BNode }) {
           {(popNode.fields.concept || popNode.fields.summary) && <p>{(popNode.fields.concept || popNode.fields.summary).slice(0, 220)}</p>}
           <div className="row"><button className="primary" onMouseDown={e => e.preventDefault()} onClick={() => { flush(); ws.select(popNode.id) }}>Abrir ficha</button><button onClick={() => setPop(null)}>Fechar</button></div>
         </div>}
-        {s.typewriter && <div style={{ height: '45vh' }} />}
       </div>
     </div>
     <div className="statusbar">
