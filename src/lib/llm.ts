@@ -49,7 +49,7 @@ export async function streamChat(messages: ChatMessage[], onText: (t: string) =>
     })
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e
-    throw new LLMError(`Não consegui falar com o servidor de IA em ${LLM_BASE_URL}. Abra o LM Studio, carregue o modelo e inicie o servidor local (aba Developer → Start Server, porta 1234) com a opção "Enable CORS" ligada.`)
+    throw new LLMError(`Não consegui falar com o servidor de IA em ${LLM_BASE_URL}. Abra o LM Studio, carregue o modelo e inicie o servidor local (aba Developer → Start Server, porta 1234) com a opção "Enable CORS" ligada. Se o Tinteiro acabou de abrir, espere alguns segundos: ele liga o LM Studio e carrega o modelo sozinho.`)
   }
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => '')

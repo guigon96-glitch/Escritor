@@ -6,6 +6,8 @@ const fs = require('node:fs')
 const http = require('node:http')
 const crypto = require('node:crypto')
 const { pathToFileURL } = require('node:url')
+const { execFile } = require('node:child_process')
+const os = require('node:os')
 const { autoUpdater } = require('electron-updater')
 
 const DIST = path.join(__dirname, '..', 'dist')
@@ -67,6 +69,7 @@ app.whenReady().then(() => {
   setupConsulta()
   createWindow()
   setupUpdater()
+  startLocalAI()
 })
 
 /* ---------------- Painel Consulta (<webview>) ---------------- */
@@ -125,6 +128,29 @@ ipcMain.handle('update:install', () => { autoUpdater.quitAndInstall(false, true)
 ipcMain.handle('app:version', () => app.getVersion())
 
 app.on('window-all-closed', () => app.quit())
+
+/* ---------------- IA local (LM Studio) ---------------- */
+// Ao abrir, liga o servidor do LM Studio (porta 1234, CORS) e carrega o modelo pelo `lms`;
+// ao fechar, descarrega o modelo se fomos nós que carregamos (libera a VRAM).
+const AI_MODEL = 'mn-12b-mag-mell-r1' // mesmo padrão de LLM_MODEL em src/lib/llm.ts
+const LMS_EXE = path.join(os.homedir(), '.lmstudio', 'bin', process.platform === 'win32' ? 'lms.exe' : 'lms')
+const lms = (...args) => new Promise(resolve => execFile(fs.existsSync(LMS_EXE) ? LMS_EXE : 'lms', args, { timeout: 180000, windowsHide: true },
+  (err, stdout, stderr) => { if (err) console.warn('lms', args.join(' '), err.message, stderr); resolve(err ? null : String(stdout)) }))
+let aiLoadedByUs = false
+
+async function startLocalAI() {
+  await lms('server', 'start', '--port', '1234', '--cors')
+  const loaded = await lms('ps')
+  if (loaded === null || loaded.toLowerCase().includes('mag-mell')) return // sem LM Studio instalado, ou modelo já carregado
+  aiLoadedByUs = (await lms('load', AI_MODEL, '--context-length', '8192', '--gpu', 'max')) !== null
+}
+
+app.on('will-quit', e => {
+  if (!aiLoadedByUs) return
+  aiLoadedByUs = false
+  e.preventDefault()
+  lms('unload', AI_MODEL).then(() => app.quit())
+})
 
 /* ---------------- Google Drive (OAuth para app instalado) ---------------- */
 
