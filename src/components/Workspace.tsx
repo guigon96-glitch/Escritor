@@ -10,6 +10,7 @@ import MainView from './MainView'
 import Inspector from './Inspector'
 import Tools from './Tools'
 import Browser from './Browser'
+import AiPanel from './AiPanel'
 import { toast } from './ui'
 
 type SyncState = 'off' | 'idle' | 'syncing' | 'error' | 'login'
@@ -24,6 +25,8 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
   const [toolMenu, setToolMenu] = useState<{ x: number; y: number; group: 'plan' | 'analyse' } | null>(null)
   const [composition, setComposition] = useState(false)
   const [consulta, setConsulta] = useState(false)
+  const [ia, setIa] = useState(false)
+  const editorRef = useRef<WS['editorRef']['current']>(null)
   const [binderOpen, setBinderOpen] = useState(window.innerWidth > (matchMedia('(pointer: coarse)').matches ? 1000 : 900))
   const [inspectorOpen, setInspectorOpen] = useState(window.innerWidth > 1200)
   const [sync, setSync] = useState<SyncState>('off')
@@ -135,7 +138,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
 
   if (!project || !nodes) return <div className="loading">Abrindo…</div>
 
-  const ws: WS = { project, nodes, byId, selectedId, select, folderView, setFolderView: v => { setFolderView(v); db.kv.put({ key: 'folderView', value: v }) }, tool, setTool: (t: Tool) => { if (t === 'search') setSearchQuery(''); setTool(t) }, composition, setComposition, addNode, trashNode, recordWords, searchQuery, openSearch: (q: string) => { setSearchQuery(q); setTool('search') } }
+  const ws: WS = { project, nodes, byId, selectedId, select, folderView, setFolderView: v => { setFolderView(v); db.kv.put({ key: 'folderView', value: v }) }, tool, setTool: (t: Tool) => { if (t === 'search') setSearchQuery(''); setTool(t) }, composition, setComposition, addNode, trashNode, recordWords, searchQuery, editorRef, openSearch: (q: string) => { setSearchQuery(q); setTool('search') } }
 
   const syncLabel: Record<SyncState, [string, string]> = { off: ['☁', 'Conectar Drive'], idle: ['☁', 'Sincronizado'], syncing: ['⟳', 'Sincronizando…'], error: ['⚠', 'Erro ao sincronizar'], login: ['☁', 'Entrar no Google'] }
 
@@ -150,6 +153,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
           <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'plan' }) }} className={['timeline', 'relations', 'grid', 'structure'].includes(tool || '') ? 'on' : ''}>🗺<span>Planejar ▾</span></button>
           <button onClick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setToolMenu({ x: r.left, y: r.bottom + 4, group: 'analyse' }) }} className={['stats', 'style'].includes(tool || '') ? 'on' : ''}>📊<span>Analisar ▾</span></button>
           <button className={consulta ? 'on' : ''} onClick={() => setConsulta(c => !c)} title="Navegador de consulta ao lado do texto">🌐<span>Consulta</span></button>
+          <button className={ia ? 'on' : ''} onClick={() => setIa(c => !c)} title="Assistente de IA local ao lado do texto (revisão, dicas, reescrita, fichas)">🤖<span>IA</span></button>
           <button onClick={() => setTool('names')}>🎲<span>Nomes</span></button>
           <button onClick={() => setTool('compile')}>📕<span>Exportar</span></button>
           <button onClick={() => setTool('settings')}>⚙<span>Ajustes</span></button>
@@ -165,6 +169,7 @@ export default function Workspace({ projectId, onExit }: { projectId: string; on
           {tool && PANE_TOOLS.includes(tool) ? <Tools /> : <MainView />}
         </main>
         {!composition && consulta && <aside className="browser-pane"><Browser onClose={() => setConsulta(false)} /></aside>}
+        {!composition && ia && <aside className="browser-pane ai-pane"><AiPanel onClose={() => setIa(false)} /></aside>}
         {!composition && inspectorOpen && <aside className="inspector-pane"><Inspector onClose={() => setInspectorOpen(false)} /></aside>}
       </div>
       {tool && !PANE_TOOLS.includes(tool) && <Tools />}

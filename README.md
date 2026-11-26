@@ -50,6 +50,24 @@ Analisar: metas/estatísticas e análise de estilo (repetições, frases longas,
 Manuscrito: cartões, tabela, texto contínuo e quadro por status. Exporta Word, EPUB, PDF, Markdown e texto.
 No editor, nomes de personagens e lugares ficam sublinhados — toque para ver a ficha.
 
+## IA local (LM Studio)
+
+O botão **🤖 IA** abre um painel ao lado do texto, como a Consulta. A IA roda no seu computador, pelo LM Studio, e nunca altera o texto do livro.
+
+1. Instale o LM Studio (https://lmstudio.ai) e abra.
+2. Na aba de busca (🔍 Discover), procure `bartowski/MN-12B-Mag-Mell-R1-GGUF` e baixe o arquivo `MN-12B-Mag-Mell-R1-Q3_K_M.gguf` (ou `IQ3_M`), com cerca de 6 GB.
+3. Na aba **Developer** (ícone `>_`), clique em **Select a model to load** e escolha o Mag-Mell. Antes de carregar, ligue **Manually choose model load parameters** e ajuste:
+   - **Context Length:** 8192 (até 12288 para cenas longas)
+   - **GPU Offload:** o máximo
+   - **K Cache / V Cache Quantization:** desligados
+4. Ainda em **Developer**, abra **Settings** e ligue **Enable CORS**. Depois ligue a chave **Status: Running** (Start Server). A porta tem que ser **1234**.
+5. Teste no navegador: `http://localhost:1234/v1/models` deve mostrar o modelo. O app espera o nome `mn-12b-mag-mell-r1`.
+6. No Tinteiro, abra uma cena e clique em **🤖 IA**:
+   - **💬 Chat:** selecione um trecho (ou nada, para a cena inteira), escolha o modo e envie. As respostas ficam no painel, com o botão **Copiar**.
+   - **🔄 Fichas e linha do tempo:** **Analisar a cena aberta**, revise as sugestões e clique em **Aplicar**.
+
+Se aparecer "Não consegui falar com o servidor de IA": o servidor não está ligado ou o CORS está desligado. Se aparecer "modelo não carregado": o nome em `/v1/models` é diferente; em desenvolvimento, ponha esse nome em `LLM_MODEL` no `.env` (veja `.env.example`). No Android a IA não funciona, porque `localhost` no celular é o próprio celular.
+
 ## Configurar o Google Drive (uma vez)
 
 Você cria **duas credenciais no mesmo projeto do Google**: “Aplicativo da Web” (usada pelo tablet/site) e

@@ -13,8 +13,6 @@ import { countWords, fmt, readingTime, roleOf } from '../lib/util'
 import { Progress, toast } from './ui'
 import { CodexHighlight, buildTerms, codexKey, type CodexTerms } from '../lib/codex'
 import { templateFor } from '../lib/templates'
-import AiWriter from './AiWriter'
-import AiSync from './AiSync'
 
 export const FONTS = ['Literata', 'Georgia', 'Times New Roman', 'Garamond', 'Palatino Linotype', 'Inter', 'Arial', 'Courier New']
 
@@ -119,8 +117,6 @@ export default function Editor({ node }: { node: BNode }) {
   const saveTimer = useRef<number>(0)
   const pending = useRef<string | null>(null)
   const [finding, setFinding] = useState(false)
-  const [ai, setAi] = useState(false)
-  const [aiSync, setAiSync] = useState(false)
   const [words, setWords] = useState(0)
   const [selWords, setSelWords] = useState(0)
   const [focusPara, setFocusPara] = useState(false)
@@ -184,6 +180,12 @@ export default function Editor({ node }: { node: BNode }) {
       force(x => x + 1)
     }
   }, [node.id])
+
+  // painel de IA lê a seleção deste editor
+  useEffect(() => {
+    ws.editorRef.current = editor
+    return () => { if (ws.editorRef.current === editor) ws.editorRef.current = null }
+  }, [editor, ws.editorRef])
 
   // save when leaving
   useEffect(() => () => flush(), [flush])
@@ -276,8 +278,6 @@ export default function Editor({ node }: { node: BNode }) {
       {btn('⁂', false, () => editor.chain().focus().insertContent(`<p style="text-align:center">${s.sceneSeparator}</p><p></p>`).run(), 'Separador de cena')}
       <span className="sep" />
       {btn('🔍', finding, () => setFinding(f => !f), 'Buscar e substituir (Ctrl+F)')}
-      {btn('✨', ai, () => setAi(true), 'Assistente de IA local: continuar, revisar, alterar, dicas, reescrever (selecione um trecho para trabalhar só nele)')}
-      {btn('🔄', aiSync, () => setAiSync(true), 'IA: atualizar fichas de personagens e linha do tempo a partir desta cena')}
       {btn('✂', false, splitHere, 'Dividir: o texto a partir do cursor vira uma nova cena')}
       <span className="sep" />
       {btn('A−', false, () => setSetting({ fontSize: Math.max(12, s.fontSize - 1) }), 'Diminuir fonte')}
@@ -287,8 +287,6 @@ export default function Editor({ node }: { node: BNode }) {
       {btn(composition ? '⤡' : '⤢', composition, () => setComposition(!composition), 'Modo composição / tela cheia (F11)')}
     </div>
     {finding && <FindBar editor={editor} onClose={() => setFinding(false)} />}
-    {ai && <AiWriter editor={editor} onClose={() => setAi(false)} />}
-    {aiSync && <AiSync node={node} text={editor.getText()} onClose={() => setAiSync(false)} />}
     <div className="ed-scroll" onClick={e => { if (e.target === e.currentTarget) editor.commands.focus('end', { scrollIntoView: false }) }}>
       <div className="page">
         <input className="doc-title" value={node.title} onChange={e => updateNode(node.id, { title: e.target.value })} placeholder="Título" />

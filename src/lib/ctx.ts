@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { Editor } from '@tiptap/react'
 import type { BNode, Project } from './db'
 
 export type FolderView = 'corkboard' | 'outliner' | 'scrivenings' | 'kanban'
@@ -22,6 +23,8 @@ export interface WS {
   recordWords: () => void
   openSearch: (q: string) => void
   searchQuery: string
+  /** Editor da cena aberta (o painel de IA lê a seleção dele; nunca escreve). */
+  editorRef: { current: Editor | null }
 }
 
 export const WSContext = createContext<WS | null>(null)
