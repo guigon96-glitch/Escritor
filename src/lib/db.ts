@@ -16,6 +16,8 @@ export interface ProjectSettings {
   colors?: import('./themes').CustomColors
   sceneSeparator: string
   codex?: boolean
+  /** Regras de escrita do autor, enviadas à IA em toda conversa deste livro. */
+  aiRules?: string
 }
 
 export interface Project {
