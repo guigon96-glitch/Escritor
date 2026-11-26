@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: './',
+  envPrefix: ['VITE_', 'LLM_'], // LLM_BASE_URL / LLM_MODEL (src/lib/llm.ts)
   plugins: [
     react(),
     VitePWA({
