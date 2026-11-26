@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db, now, uid, type BNode } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { CHARACTER_TEMPLATE } from '../lib/templates'
-import { roleOf } from '../lib/util'
-import { readEditor } from './AiWriter'
+import { charsIn, readEditor } from './AiWriter'
 import { LLMError, extractJSON, streamChat } from '../lib/llm'
 import { toast } from './ui'
 
@@ -18,7 +17,6 @@ type Ficha = { personagem: string; campo: string; valor: string; motivo: string 
 type Evento = { titulo: string; data: string; descricao: string; personagens: string[] }
 type Item<T> = T & { on: boolean; append?: boolean }
 
-const names = (c: BNode) => [c.title, c.fields.fullName || '', ...c.aliases.split(',')].map(s => s.trim()).filter(s => s.length > 1)
 
 /** Aba "Fichas" do painel de IA: analisa a cena aberta; só grava nas fichas/linha do tempo após "Aplicar". */
 export default function AiSync() {
@@ -34,8 +32,7 @@ export default function AiSync() {
   useEffect(() => () => abort.current?.abort(), [])
 
   const pick = (text: string) => {
-    const low = text.slice(0, SCENE_CHARS).toLowerCase()
-    const chars = nodes.filter(n => n.kind === 'character' && !n.deleted && roleOf(nodes, n) === 'characters' && names(n).some(s => low.includes(s.toLowerCase()))).slice(0, MAX_CHARS)
+    const chars = charsIn(nodes, text.slice(0, SCENE_CHARS)).slice(0, MAX_CHARS)
     // refs curtas (P1, P2…) no lugar dos ids: o modelo copia melhor
     return Object.fromEntries(chars.map((c, i) => [`P${i + 1}`, c]))
   }

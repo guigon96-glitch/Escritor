@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_SYSTEM_PROMPT, LLM_BASE_URL, LLMError, MODES, streamChat, type ChatMessage, type Mode } from '../lib/llm'
+import type { BNode } from '../lib/db'
 import type { WS } from '../lib/ctx'
 import { useWS } from '../lib/ctx'
-import { countWords, htmlToText } from '../lib/util'
+import { countWords, htmlToText, roleOf } from '../lib/util'
 import { toast } from './ui'
 
-// shortcut: limites por caracteres (~3k e ~7k tokens), não por tokens; ajuste se mudar o context length.
+// shortcut: limites por caracteres (~3k e ~6k tokens), não por tokens; ajuste se mudar o context length (8192 hoje).
 const CONTEXT_CHARS = 10000
-const HISTORY_CHARS = 24000
+const TOTAL_CHARS = 21000 // system + histórico; sobra ~1k tokens para a resposta
+
+/** Nome, nome completo e apelidos de um personagem (para achá-lo no texto). */
+export const charNames = (c: BNode) => [c.title, c.fields.fullName || '', ...c.aliases.split(',')].map(s => s.trim()).filter(s => s.length > 1)
+
+/** Personagens cadastrados que aparecem no texto. */
+export function charsIn(nodes: BNode[], text: string) {
+  const low = text.toLowerCase()
+  return nodes.filter(n => n.kind === 'character' && !n.deleted && roleOf(nodes, n) === 'characters' && charNames(n).some(s => low.includes(s.toLowerCase())))
+}
 
 /** Lê (sem alterar) a cena aberta: texto inteiro e a seleção atual do editor. */
 export function readEditor(ws: WS) {
@@ -19,13 +29,13 @@ export function readEditor(ws: WS) {
 }
 
 /** Mantém a 1ª mensagem (que leva o trecho) e as mais recentes que couberem no orçamento. */
-function trimHistory(msgs: ChatMessage[]): ChatMessage[] {
+function trimHistory(msgs: ChatMessage[], budget: number): ChatMessage[] {
   const [first, ...rest] = msgs
   const kept: ChatMessage[] = []
   let total = first.content.length
   for (let i = rest.length - 1; i >= 0; i--) {
     total += rest[i].content.length
-    if (total > HISTORY_CHARS) break
+    if (total > budget) break
     kept.unshift(rest[i])
   }
   return [first, ...kept]
@@ -46,6 +56,13 @@ export default function AiWriter() {
   useEffect(() => () => abort.current?.abort(), [])
   useEffect(() => { listRef.current?.scrollTo(0, listRef.current.scrollHeight) }, [msgs])
 
+  // vozes ("Jeito de falar" e bordões da ficha) só dos personagens que aparecem no trecho
+  const voices = (text: string) => {
+    const v = charsIn(ws.nodes, text).filter(c => c.fields.speech?.trim() || c.fields.catchphrases?.trim())
+      .map(c => `- ${c.title}: ${[c.fields.speech, c.fields.catchphrases && `bordões: ${c.fields.catchphrases}`].filter(Boolean).join('; ')}`)
+    return v.length ? `\n\nComo falam os personagens deste trecho:\n${v.join('\n')}` : ''
+  }
+
   const send = async () => {
     const text = input.trim() || (msgs.length ? '' : MODES[mode].label)
     if (!text || busy) return
@@ -63,8 +80,9 @@ export default function AiWriter() {
       const { title, genre, settings: { aiRules } } = ws.project
       // regras do autor por último: têm prioridade sobre as do modo (ex.: humanizar)
       const system = `${DEFAULT_SYSTEM_PROMPT}\n\nLivro: "${title}"${genre ? `, gênero: ${genre}` : ''}.\n\n${MODES[mode].prompt}` +
-        (aiRules?.trim() ? `\n\nRegras do autor para este livro. Siga sempre; elas têm prioridade sobre as instruções acima:\n${aiRules.trim()}` : '')
-      await streamChat([{ role: 'system', content: system }, ...trimHistory(history)],
+        (aiRules?.trim() ? `\n\nRegras do autor para este livro. Siga sempre; elas têm prioridade sobre as instruções acima:\n${aiRules.trim()}` : '') +
+        voices(history[0].content)
+      await streamChat([{ role: 'system', content: system }, ...trimHistory(history, TOTAL_CHARS - system.length)],
         t => setMsgs(m => [...m.slice(0, -1), { role: 'assistant', content: m[m.length - 1].content + t }]),
         { signal: abort.current.signal, temperature })
     } catch (e) {
