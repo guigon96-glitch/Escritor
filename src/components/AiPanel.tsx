@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import AiWriter from './AiWriter'
 import AiSync from './AiSync'
+import AiChapters from './AiChapters'
 import { db, now } from '../lib/db'
 import { useWS } from '../lib/ctx'
 import { LazyText } from './ui'
@@ -25,12 +26,13 @@ function Rules() {
 
 /** Painel de IA ao lado do texto (como a Consulta). As duas abas ficam montadas para não perder a conversa. */
 export default function AiPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'chat' | 'fichas' | 'regras'>('chat')
+  const [tab, setTab] = useState<'chat' | 'fichas' | 'capitulos' | 'regras'>('chat')
   return <div className="ai-panel">
     <div className="browser-bar">
       <div className="seg" role="tablist">
         <button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'on' : ''} onClick={() => setTab('chat')}>💬 Chat</button>
         <button role="tab" aria-selected={tab === 'fichas'} className={tab === 'fichas' ? 'on' : ''} onClick={() => setTab('fichas')}>🔄 Fichas</button>
+        <button role="tab" aria-selected={tab === 'capitulos'} className={tab === 'capitulos' ? 'on' : ''} onClick={() => setTab('capitulos')}>🔍 Capítulos</button>
         <button role="tab" aria-selected={tab === 'regras'} className={tab === 'regras' ? 'on' : ''} onClick={() => setTab('regras')}>📜 Regras</button>
       </div>
       <span style={{ flex: 1 }} />
@@ -38,6 +40,7 @@ export default function AiPanel({ onClose }: { onClose: () => void }) {
     </div>
     <div style={{ display: tab === 'chat' ? 'contents' : 'none' }}><AiWriter /></div>
     <div style={{ display: tab === 'fichas' ? 'contents' : 'none' }}><AiSync /></div>
+    <div style={{ display: tab === 'capitulos' ? 'contents' : 'none' }}><AiChapters /></div>
     {tab === 'regras' && <Rules />}
   </div>
 }

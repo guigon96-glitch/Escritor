@@ -3,21 +3,15 @@ import { DEFAULT_SYSTEM_PROMPT, LLM_BASE_URL, LLMError, MODES, streamChat, type 
 import type { BNode } from '../lib/db'
 import type { WS } from '../lib/ctx'
 import { useWS } from '../lib/ctx'
-import { countWords, htmlToText, roleOf } from '../lib/util'
+import { countWords, htmlToText } from '../lib/util'
+import { entitiesIn } from '../lib/entities'
 import { toast } from './ui'
 
 // shortcut: limites por caracteres (~3k e ~6k tokens), não por tokens; ajuste se mudar o context length (8192 hoje).
 const CONTEXT_CHARS = 10000
 const TOTAL_CHARS = 21000 // system + histórico; sobra ~1k tokens para a resposta
 
-/** Nome, nome completo e apelidos de um personagem (para achá-lo no texto). */
-export const charNames = (c: BNode) => [c.title, c.fields.fullName || '', ...c.aliases.split(',')].map(s => s.trim()).filter(s => s.length > 1)
-
-/** Personagens cadastrados que aparecem no texto. */
-export function charsIn(nodes: BNode[], text: string) {
-  const low = text.toLowerCase()
-  return nodes.filter(n => n.kind === 'character' && !n.deleted && roleOf(nodes, n) === 'characters' && charNames(n).some(s => low.includes(s.toLowerCase())))
-}
+const charsIn = (nodes: BNode[], text: string) => entitiesIn(nodes, text).filter(n => n.kind === 'character')
 
 /** Lê (sem alterar) a cena aberta: texto inteiro e a seleção atual do editor. */
 export function readEditor(ws: WS) {
