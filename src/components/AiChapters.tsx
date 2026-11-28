@@ -25,7 +25,7 @@ type Crit = keyof typeof CRITERIA
 const KEYS = Object.keys(CRITERIA) as Crit[]
 const TIPOS = ['inconsistência', 'ponto de vista', 'tempo verbal', 'diálogo', 'mostrar x contar', 'ritmo', 'clichê ou vício de IA', 'redundância', 'clareza', 'outro']
 
-// shortcut: orçamento por caracteres para contexto de 8192 tokens; aumente PART_CHARS se carregar o modelo com mais contexto.
+// shortcut: orçamento por caracteres para contexto de 12288 tokens; aumente PART_CHARS se carregar o modelo com mais contexto.
 const PART_CHARS = 6000, RULES_CHARS = 2400, GENRE_CHARS = 1200, FICHA_CHARS = 1800, FACTS_CHARS = 1500
 
 interface Problem { tipo: string; trecho: string; problema: string; sugestao: string }
@@ -72,13 +72,15 @@ export default function AiChapters() {
     const notas = Object.fromEntries(KEYS.map(k => [k, { notas: [] as number[], motivos: [] as string[] }])) as Record<Crit, { notas: number[]; motivos: string[] }>
     const problemas: Problem[] = [], log: string[] = []
     let fatos: string[] = []
-    const nota = { type: 'object', additionalProperties: false, required: ['nota', 'motivo'], properties: { nota: { type: 'integer', minimum: 0, maximum: 10 }, motivo: { type: 'string' } } }
+    // maxLength limita cada texto: sem isso a resposta passa de maxTokens, é cortada e vira JSON inválido
+    const str = (n: number) => ({ type: 'string', maxLength: n })
+    const nota = { type: 'object', additionalProperties: false, required: ['nota', 'motivo'], properties: { nota: { type: 'integer', minimum: 0, maximum: 10 }, motivo: str(160) } }
     const schema = {
       type: 'object', additionalProperties: false, required: ['notas', 'problemas', 'fatos'],
       properties: {
         notas: { type: 'object', additionalProperties: false, required: KEYS, properties: Object.fromEntries(KEYS.map(k => [k, nota])) },
-        problemas: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['tipo', 'trecho', 'problema', 'sugestao'], properties: { tipo: { type: 'string', enum: TIPOS }, trecho: { type: 'string' }, problema: { type: 'string' }, sugestao: { type: 'string' } } } },
-        fatos: { type: 'array', maxItems: 10, items: { type: 'string' } }
+        problemas: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['tipo', 'trecho', 'problema', 'sugestao'], properties: { tipo: { type: 'string', enum: TIPOS }, trecho: str(160), problema: str(220), sugestao: str(220) } } },
+        fatos: { type: 'array', maxItems: 8, items: str(110) }
       }
     }
     for (let i = 0; i < parts.length; i++) {
@@ -95,13 +97,13 @@ ${parts[i]}
 
 ---
 Dê uma nota honesta para cada critério, com um motivo curto que cite um exemplo do texto. Seja exigente: não dê 9 ou 10 sem motivo.
-Em "problemas", liste até 8 problemas concretos, mais graves primeiro, principalmente inconsistências. "inconsistência" é só contradição de FATO (nome, lugar, ferimento, objeto, tempo, quem está onde) com o próprio texto ou as fichas; nunca é "o personagem deveria agir de outro jeito", falta de compaixão, de punição ou de moral. "trecho" é a frase exata copiada do texto; "sugestao" é como corrigir.
+Em "problemas", liste até 6 problemas concretos, mais graves primeiro, principalmente inconsistências. "inconsistência" é só contradição de FATO (nome, lugar, ferimento, objeto, tempo, quem está onde) com o próprio texto ou as fichas; nunca é "o personagem deveria agir de outro jeito", falta de compaixão, de punição ou de moral. "trecho" é a frase exata copiada do texto; "sugestao" é como corrigir.
 Em "fatos", liste fatos concretos desta parte que precisam ficar coerentes depois (ferimentos, objetos, quem está onde, horário, luz do céu).`
       let out = ''
       await streamChat([
         { role: 'system', content: 'Você é um editor literário exigente de ficção adulta e sombria. Avalia a prosa sem julgamento moral do conteúdo: crueldade, injustiça e personagens sem compaixão são escolhas do autor, não erros. Responde só em JSON.' },
         { role: 'user', content: prompt }
-      ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 1500, schema })
+      ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 2500, schema })
       const r = extractJSON<{ notas?: Record<string, { nota?: number; motivo?: string }>; problemas?: Problem[]; fatos?: string[] }>(out)
       for (const k of KEYS) {
         const v = r.notas?.[k]

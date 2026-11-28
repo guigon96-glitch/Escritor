@@ -57,7 +57,7 @@ O botão **🤖 IA** abre um painel ao lado do texto, como a Consulta. A IA roda
 1. Instale o LM Studio (https://lmstudio.ai) e abra.
 2. Na aba de busca (🔍 Discover), procure `bartowski/MN-12B-Mag-Mell-R1-GGUF` e baixe o arquivo `MN-12B-Mag-Mell-R1-Q3_K_M.gguf` (ou `IQ3_M`), com cerca de 6 GB.
 3. Na aba **Developer** (ícone `>_`), clique em **Select a model to load** e escolha o Mag-Mell. Antes de carregar, ligue **Manually choose model load parameters** e ajuste:
-   - **Context Length:** 8192 (até 12288 para cenas longas)
+   - **Context Length:** 12288 (a análise de capítulos e as fichas precisam disso)
    - **GPU Offload:** o máximo
    - **K Cache / V Cache Quantization:** desligados
 4. Ainda em **Developer**, abra **Settings** e ligue **Enable CORS**. Depois ligue a chave **Status: Running** (Start Server). A porta tem que ser **1234**.

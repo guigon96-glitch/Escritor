@@ -31,7 +31,7 @@ export const pendingKey = (projectId: string) => 'ia:pendentes:' + projectId
 export async function getPending(projectId: string) { return ((await db.kv.get(pendingKey(projectId)))?.value as Pending[]) || [] }
 export const setPending = (projectId: string, p: Pending[]) => db.kv.put({ key: pendingKey(projectId), value: p })
 
-// shortcut: orçamento por caracteres para contexto de 8192 tokens (texto ≤ 6000 caracteres por chamada).
+// shortcut: orçamento por caracteres para contexto de 12288 tokens (texto ≤ 6000 caracteres por chamada).
 const FIELD_CHARS = 150, ENTITY_CHARS = 700, MAX_ENTITIES = 10, NAMES_CHARS = 1500
 
 type Raw = {
@@ -75,13 +75,14 @@ Extraia do trecho o que deve ir para as fichas. Só fatos explícitos no texto; 
 - Se não houver nada, devolva listas vazias.`
   const refProp = refs.length ? { type: 'string', enum: refs } : { type: 'string' }
   const tRefs = Object.keys(evRef)
+  const str = (n: number) => ({ type: 'string', maxLength: n }) // limita a resposta para não ser cortada em maxTokens
   const schema = {
     type: 'object', additionalProperties: false, required: ['atualizacoes', 'novos', 'eventos', 'correcoes'],
     properties: {
-      atualizacoes: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['ref', 'campo', 'valor', 'motivo'], properties: { ref: refProp, campo: { type: 'string', enum: ALL_KEYS }, valor: { type: 'string' }, motivo: { type: 'string' } } } },
-      novos: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['tipo', 'nome', 'resumo', 'detalhes', 'motivo'], properties: { tipo: { type: 'string', enum: TYPES }, nome: { type: 'string' }, resumo: { type: 'string' }, detalhes: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['campo', 'valor'], properties: { campo: { type: 'string', enum: ALL_KEYS }, valor: { type: 'string' } } } }, motivo: { type: 'string' } } } },
-      eventos: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['titulo', 'data', 'descricao', 'envolvidos', 'antes_de'], properties: { titulo: { type: 'string' }, data: { type: 'string' }, descricao: { type: 'string' }, envolvidos: { type: 'array', items: refProp }, antes_de: { type: 'string', enum: [...tRefs, 'fim'] } } } },
-      correcoes: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['evento', 'data', 'descricao', 'motivo'], properties: { evento: tRefs.length ? { type: 'string', enum: tRefs } : { type: 'string' }, data: { type: 'string' }, descricao: { type: 'string' }, motivo: { type: 'string' } } } }
+      atualizacoes: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['ref', 'campo', 'valor', 'motivo'], properties: { ref: refProp, campo: { type: 'string', enum: ALL_KEYS }, valor: str(200), motivo: str(120) } } },
+      novos: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['tipo', 'nome', 'resumo', 'detalhes', 'motivo'], properties: { tipo: { type: 'string', enum: TYPES }, nome: str(50), resumo: str(160), detalhes: { type: 'array', maxItems: 4, items: { type: 'object', additionalProperties: false, required: ['campo', 'valor'], properties: { campo: { type: 'string', enum: ALL_KEYS }, valor: str(200) } } }, motivo: str(120) } } },
+      eventos: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['titulo', 'data', 'descricao', 'envolvidos', 'antes_de'], properties: { titulo: str(70), data: str(40), descricao: str(200), envolvidos: { type: 'array', items: refProp }, antes_de: { type: 'string', enum: [...tRefs, 'fim'] } } } },
+      correcoes: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['evento', 'data', 'descricao', 'motivo'], properties: { evento: tRefs.length ? { type: 'string', enum: tRefs } : { type: 'string' }, data: str(40), descricao: str(200), motivo: str(120) } } }
     }
   }
   let out = ''
@@ -89,7 +90,7 @@ Extraia do trecho o que deve ir para as fichas. Só fatos explícitos no texto; 
   await streamChat([
     { role: 'system', content: 'Você é um assistente de continuidade para um romancista. Extrai fatos de ficção (inclusive adulta e sombria) sem julgamentos morais e responde só em JSON.' },
     { role: 'user', content: prompt }
-  ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 1500, schema })
+  ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 2500, schema })
   return applyExtraction(projectId, extractJSON<Raw>(out), ref, origem, sceneIds, evRef)
 }
 

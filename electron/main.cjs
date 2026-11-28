@@ -142,7 +142,7 @@ async function startLocalAI() {
   await lms('server', 'start', '--port', '1234', '--cors')
   const loaded = await lms('ps')
   if (loaded === null || loaded.toLowerCase().includes('mag-mell')) return // sem LM Studio instalado, ou modelo já carregado
-  aiLoadedByUs = (await lms('load', AI_MODEL, '--context-length', '8192', '--gpu', 'max')) !== null
+  aiLoadedByUs = (await lms('load', AI_MODEL, '--context-length', '12288', '--gpu', 'max')) !== null
 }
 
 app.on('will-quit', e => {

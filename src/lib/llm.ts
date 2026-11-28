@@ -74,8 +74,9 @@ export async function streamChat(messages: ChatMessage[], onText: (t: string) =>
 /** Extrai o primeiro objeto JSON da resposta (tolera texto ou ``` em volta). */
 export function extractJSON<T>(text: string): T {
   const a = text.indexOf('{'), b = text.lastIndexOf('}')
-  if (a < 0 || b < a) throw new LLMError('A IA não devolveu JSON. Tente de novo.')
-  try { return JSON.parse(text.slice(a, b + 1)) } catch { throw new LLMError('A IA devolveu um JSON inválido. Tente de novo.') }
+  const cut = 'A resposta da IA foi cortada no meio. No LM Studio, carregue o modelo com contexto maior (12288 ou mais) e tente de novo.'
+  if (a < 0 || b < a) throw new LLMError(text.trim() ? cut : 'A IA não devolveu JSON. Tente de novo.')
+  try { return JSON.parse(text.slice(a, b + 1)) } catch { throw new LLMError(text.trimEnd().endsWith('}') ? 'A IA devolveu um JSON inválido. Tente de novo.' : cut) }
 }
 
 // Regras adaptadas da skill "humanizer" (github.com/blader/humanizer, MIT) para ficção em português.
