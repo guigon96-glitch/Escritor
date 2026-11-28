@@ -6,7 +6,7 @@ import { descendants, htmlToText, rootByRole } from '../lib/util'
 import { LLMError, extractJSON, streamChat } from '../lib/llm'
 import { chunks, hash, hygiene, over, proseMetrics, type Metric } from '../lib/prose'
 import { entitiesIn, syncEntities, templateOf } from '../lib/entities'
-import { Progress } from './ui'
+import { LazyText, Progress } from './ui'
 
 // O que cada nota mede (vai no prompt e aparece para o autor).
 export const CRITERIA = {
@@ -28,7 +28,13 @@ const TIPOS = ['inconsistência', 'ponto de vista', 'tempo verbal', 'diálogo', 
 // shortcut: orçamento por caracteres para contexto de 12288 tokens; aumente PART_CHARS se carregar o modelo com mais contexto.
 const PART_CHARS = 6000, RULES_CHARS = 2400, GENRE_CHARS = 1200, FICHA_CHARS = 1800, FACTS_CHARS = 1500
 
-interface Problem { tipo: string; trecho: string; problema: string; sugestao: string }
+interface Problem {
+  tipo: string; trecho: string; problema: string; sugestao: string
+  justificativa?: string // defesa do autor
+  veredito?: { aceita: boolean; resposta: string; at: number } // resposta da IA à defesa
+}
+// critério que cada tipo de problema derruba (para refazer a nota depois da justificativa)
+const CRIT_OF: Record<string, Crit> = { 'inconsistência': 'coerencia', 'ponto de vista': 'pov', 'tempo verbal': 'pov', 'diálogo': 'dialogo', 'mostrar x contar': 'mostrar', 'ritmo': 'ritmo', 'clichê ou vício de IA': 'originalidade', 'redundância': 'economia', 'clareza': 'clareza' }
 export interface ChapterAnalysis {
   at: number; hash: string; words: number; metrics: Metric[]
   notas: Record<Crit, { nota: number; motivos: string[] }>
@@ -121,6 +127,69 @@ Em "fatos", liste fatos concretos desta parte que precisam ficar coerentes depoi
     await db.kv.put({ key: kvKey(ch.id), value: a })
   }
 
+  /** Reavalia só os problemas que o autor justificou e refaz a nota dos critérios afetados. */
+  async function reverify(ch: BNode, a: ChapterAnalysis, signal: AbortSignal) {
+    const { text } = chapterText(nodes, ch)
+    const genre = (project.settings.aiGenre || '').slice(0, GENRE_CHARS), rules = (project.settings.aiRules || '').slice(0, RULES_CHARS)
+    const todo = a.problemas.map((p, i) => ({ p, i })).filter(({ p }) => p.justificativa?.trim() && !p.veredito)
+    const problemas = [...a.problemas], notas = { ...a.notas }
+    for (let g = 0; g < todo.length; g += 4) { // 4 por chamada para caber no contexto
+      const group = todo.slice(g, g + 4)
+      setBusy(`Reavaliando justificativas ${g + 1}–${g + group.length} de ${todo.length} ("${ch.title}")…`)
+      const crits = [...new Set(group.map(({ p }) => CRIT_OF[p.tipo]).filter(Boolean))]
+      const ctx = (t: string) => { const at = t ? text.indexOf(t.slice(0, 60)) : -1; return at < 0 ? '(trecho não localizado no texto atual)' : text.slice(Math.max(0, at - 900), at + t.length + 900) }
+      const prompt = `${genre ? `Gênero e convenções do livro (intencionais):\n${genre}\n\n` : ''}${rules ? `Regras de estilo do autor:\n${rules}\n\n` : ''}Você apontou estes problemas no capítulo "${ch.title}" e o autor justificou cada um.
+${group.map(({ p }, k) => `
+P${k + 1} [${p.tipo}] ${p.problema}
+Trecho: "${p.trecho || '—'}"
+Contexto no texto:
+${ctx(p.trecho)}
+Justificativa do autor: ${p.justificativa!.trim()}`).join('\n')}
+${crits.length ? `\nNotas atuais: ${crits.map(k => `${k} (${CRITERIA[k][0]}) = ${notas[k].nota}`).join('; ')}` : ''}
+
+---
+Seja franco. Para cada P, julgue a justificativa pelo texto, pelas fichas implícitas e pelo gênero, não pela insistência do autor.
+- Se ela se sustenta (o texto ou o gênero explica, ou você entendeu errado), "aceita" = true e diga por quê.
+- Se não se sustenta, "aceita" = false e diga direto, por exemplo "Sua justificativa não faz sentido porque…", citando o texto.
+${crits.length ? 'Em "notas", dê a nova nota de 0 a 10 de cada critério listado em "Notas atuais", considerando só os vereditos: suba se o problema caiu, mantenha ou baixe se não caiu.' : 'Em "notas", devolva um objeto vazio.'}`
+      const str = (n: number) => ({ type: 'string', maxLength: n })
+      const schema = {
+        type: 'object', additionalProperties: false, required: ['vereditos', 'notas'],
+        properties: {
+          vereditos: { type: 'array', minItems: group.length, maxItems: group.length, items: { type: 'object', additionalProperties: false, required: ['p', 'aceita', 'resposta'], properties: { p: { type: 'string', enum: group.map((_, k) => `P${k + 1}`) }, aceita: { type: 'boolean' }, resposta: str(400) } } },
+          notas: { type: 'object', additionalProperties: false, required: crits, properties: Object.fromEntries(crits.map(k => [k, { type: 'object', additionalProperties: false, required: ['nota', 'motivo'], properties: { nota: { type: 'integer', minimum: 0, maximum: 10 }, motivo: str(200) } }])) }
+        }
+      }
+      let out = ''
+      await streamChat([
+        { role: 'system', content: 'Você é um editor literário franco de ficção adulta e sombria. Não bajula: aceita a defesa do autor só quando ela tem fundamento e diz claramente quando não tem. Responde só em JSON.' },
+        { role: 'user', content: prompt }
+      ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 2000, schema })
+      const r = extractJSON<{ vereditos?: { p: string; aceita: boolean; resposta: string }[]; notas?: Record<string, { nota?: number; motivo?: string }> }>(out)
+      for (const v of r.vereditos || []) {
+        const it = group[+String(v.p).slice(1) - 1]
+        if (it && typeof v.aceita === 'boolean') problemas[it.i] = { ...problemas[it.i], veredito: { aceita: v.aceita, resposta: v.resposta?.trim() || '', at: Date.now() } }
+      }
+      for (const k of crits) {
+        const v = r.notas?.[k]
+        if (typeof v?.nota === 'number') notas[k] = { nota: Math.max(0, Math.min(10, v.nota)), motivos: [...notas[k].motivos, `Reavaliação após justificativa: ${v.motivo?.trim() || ''}`] }
+      }
+    }
+    await db.kv.put({ key: kvKey(ch.id), value: { ...a, problemas, notas } })
+  }
+
+  const saveJust = async (ch: BNode, i: number, v: string) => {
+    const a = (await db.kv.get(kvKey(ch.id)))?.value as ChapterAnalysis | undefined // relê: não perde outra justificativa salva há pouco
+    if (a) await db.kv.put({ key: kvKey(ch.id), value: { ...a, problemas: a.problemas.map((p, j) => j === i ? { ...p, justificativa: v, veredito: v.trim() === (p.justificativa || '').trim() ? p.veredito : undefined } : p) } })
+  }
+
+  const runReverify = async (ch: BNode, a: ChapterAnalysis) => {
+    setError(''); abort.current = new AbortController()
+    try { await reverify(ch, a, abort.current.signal) } catch (e) {
+      if ((e as Error).name !== 'AbortError') setError(e instanceof LLMError ? e.message : 'Erro inesperado: ' + (e as Error).message)
+    } finally { setBusy('') }
+  }
+
   const run = async (list: BNode[]) => {
     setError(''); abort.current = new AbortController()
     try {
@@ -182,10 +251,16 @@ Em "fatos", liste fatos concretos desta parte que precisam ficar coerentes depoi
         {!!a.fichas?.length && <details className="ai-item"><summary>Fichas criadas ou preenchidas ao ler ({a.fichas.length})</summary><ul>{a.fichas.map((l, i) => <li key={i}>{l}</li>)}</ul></details>}
         <h4>Problemas e inconsistências ({a.problemas.length})</h4>
         {a.problemas.length === 0 && <p className="muted">Nenhum apontado.</p>}
-        {a.problemas.map((p, i) => <div key={i} className="ai-item">
-          <b>{p.tipo}</b>: {p.problema}
+        {a.problemas.some(p => p.justificativa?.trim() && !p.veredito) && <button className="primary" disabled={!!busy} onClick={() => runReverify(detail, a)}>Reverificar {a.problemas.filter(p => p.justificativa?.trim() && !p.veredito).length} justificado(s)</button>}
+        {a.problemas.map((p, i) => <div key={i} className="ai-item" style={p.veredito?.aceita ? { opacity: 0.6 } : undefined}>
+          <b>{p.tipo}</b>: {p.veredito?.aceita ? <s>{p.problema}</s> : p.problema}
           {p.trecho && <div><button className="linkish" title="Achar no texto" onClick={() => ws.openSearch(p.trecho.slice(0, 60))}>“{p.trecho}”</button></div>}
           {p.sugestao && <small className="muted">Sugestão: {p.sugestao}</small>}
+          <details open={!!p.justificativa}>
+            <summary><small>Justificar</small></summary>
+            <LazyText value={p.justificativa || ''} rows={2} placeholder="Por que isto não é um problema? Ex.: é intencional, o instrutor é cruel de propósito." onCommit={v => saveJust(detail, i, v)} />
+          </details>
+          {p.veredito && <div role="status" style={{ color: p.veredito.aceita ? 'var(--ok, #2e7d32)' : 'var(--danger)' }}><b>{p.veredito.aceita ? '✓ Justificativa aceita' : '✗ Justificativa recusada'}:</b> {p.veredito.resposta}</div>}
         </div>)}
       </>}
     </div>
