@@ -26,7 +26,7 @@ const KEYS = Object.keys(CRITERIA) as Crit[]
 const TIPOS = ['inconsistência', 'ponto de vista', 'tempo verbal', 'diálogo', 'mostrar x contar', 'ritmo', 'clichê ou vício de IA', 'redundância', 'clareza', 'outro']
 
 // shortcut: orçamento por caracteres para contexto de 8192 tokens; aumente PART_CHARS se carregar o modelo com mais contexto.
-const PART_CHARS = 6000, RULES_CHARS = 3000, FICHA_CHARS = 1800, FACTS_CHARS = 1500
+const PART_CHARS = 6000, RULES_CHARS = 2400, GENRE_CHARS = 1200, FICHA_CHARS = 1800, FACTS_CHARS = 1500
 
 interface Problem { tipo: string; trecho: string; problema: string; sugestao: string }
 export interface ChapterAnalysis {
@@ -67,6 +67,7 @@ export default function AiChapters() {
     const { words, metrics } = proseMetrics(text, scenes)
     const fichas = entitiesIn(nodes, text).map(c => `${c.title}: ${templateOf(c).sections.flatMap(s => s.fields).filter(f => c.fields[f.key]).map(f => `${f.label}: ${c.fields[f.key].slice(0, 120)}`).join('; ')}`).join('\n').slice(0, FICHA_CHARS)
     const rules = (project.settings.aiRules || '').slice(0, RULES_CHARS)
+    const genre = (project.settings.aiGenre || '').slice(0, GENRE_CHARS)
     const parts = chunks(text, PART_CHARS)
     const notas = Object.fromEntries(KEYS.map(k => [k, { notas: [] as number[], motivos: [] as string[] }])) as Record<Crit, { notas: number[]; motivos: string[] }>
     const problemas: Problem[] = [], log: string[] = []
@@ -83,7 +84,7 @@ export default function AiChapters() {
     for (let i = 0; i < parts.length; i++) {
       setBusy(`Capítulo ${n} de ${of} ("${ch.title}"), parte ${i + 1} de ${parts.length}…`)
       const prompt = `Capítulo "${ch.title}", parte ${i + 1} de ${parts.length}.
-${rules ? `\nRegras de estilo do autor (avalie a prosa contra elas):\n${rules}\n` : ''}
+${genre ? `\nGênero e convenções do livro (isto é intencional, NÃO é problema):\n${genre}\n` : ''}${rules ? `\nRegras de estilo do autor (avalie a prosa contra elas):\n${rules}\n` : ''}
 ${fichas ? `\nFichas dos personagens que aparecem (aponte contradição com elas):\n${fichas}\n` : ''}
 ${fatos.length ? `\nFatos já estabelecidos nas partes anteriores deste capítulo (aponte contradição com eles):\n- ${fatos.join('\n- ')}\n` : ''}
 Critérios (nota de 0 a 10; 10 = publicável, 5 = mediano, 0 = falha grave):
@@ -94,11 +95,11 @@ ${parts[i]}
 
 ---
 Dê uma nota honesta para cada critério, com um motivo curto que cite um exemplo do texto. Seja exigente: não dê 9 ou 10 sem motivo.
-Em "problemas", liste até 8 problemas concretos, mais graves primeiro, principalmente inconsistências. "trecho" é a frase exata copiada do texto; "sugestao" é como corrigir.
+Em "problemas", liste até 8 problemas concretos, mais graves primeiro, principalmente inconsistências. "inconsistência" é só contradição de FATO (nome, lugar, ferimento, objeto, tempo, quem está onde) com o próprio texto ou as fichas; nunca é "o personagem deveria agir de outro jeito", falta de compaixão, de punição ou de moral. "trecho" é a frase exata copiada do texto; "sugestao" é como corrigir.
 Em "fatos", liste fatos concretos desta parte que precisam ficar coerentes depois (ferimentos, objetos, quem está onde, horário, luz do céu).`
       let out = ''
       await streamChat([
-        { role: 'system', content: 'Você é um editor literário exigente de ficção adulta e sombria. Avalia a prosa sem julgamento moral do conteúdo e responde só em JSON.' },
+        { role: 'system', content: 'Você é um editor literário exigente de ficção adulta e sombria. Avalia a prosa sem julgamento moral do conteúdo: crueldade, injustiça e personagens sem compaixão são escolhas do autor, não erros. Responde só em JSON.' },
         { role: 'user', content: prompt }
       ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 1500, schema })
       const r = extractJSON<{ notas?: Record<string, { nota?: number; motivo?: string }>; problemas?: Problem[]; fatos?: string[] }>(out)

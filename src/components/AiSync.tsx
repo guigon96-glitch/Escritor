@@ -42,6 +42,9 @@ export default function AiSync() {
   const marked = pending.filter(p => p.on).length
   const campos = pending.filter(p => p.kind === 'campo' && byId.get(p.nodeId) && !byId.get(p.nodeId)!.deleted) as Extract<Pending, { kind: 'campo' }>[]
   const eventos = pending.filter(p => p.kind === 'evento') as Extract<Pending, { kind: 'evento' }>[]
+  const correcoes = pending.filter(p => p.kind === 'correcao') as Extract<Pending, { kind: 'correcao' }>[]
+  const evTitles = useLiveQuery(() => db.events.where('projectId').equals(project.id).toArray(), [project.id]) || []
+  const evOf = (id?: string) => evTitles.find(e => e.id === id)
 
   return <div className="ai-body">
     <div className="row wrap">
@@ -52,7 +55,7 @@ export default function AiSync() {
       </>}
     </div>
     <div className="ai-scroll">
-      <p className="muted">A IA lê o texto e cuida das fichas de personagens e do Mundo (lugares, casas, facções, povos, objetos…). Fichas novas e campos vazios são preenchidos sozinhos; o que muda informação já escrita e os eventos da linha do tempo ficam aqui para você aprovar. O texto do livro nunca é alterado. A aba 🔍 Capítulos faz o mesmo para cada capítulo.</p>
+      <p className="muted">A IA lê o texto e cuida das fichas de personagens e do Mundo (lugares, casas, facções, povos, objetos…). Fichas novas, campos vazios e informações novas nos campos de texto longo entram sozinhos; o que contradiz a ficha, os eventos novos (já na posição cronológica certa) e as correções da linha do tempo ficam aqui para você aprovar. O texto do livro nunca é alterado. A aba 🔍 Capítulos faz o mesmo para cada capítulo.</p>
       {busy && <p className="muted" aria-live="polite">{busy}</p>}
       {error && <p role="alert" style={{ color: 'var(--danger)' }}>{error}</p>}
       {last && <>
@@ -80,8 +83,16 @@ export default function AiSync() {
       {eventos.map(p => <div key={p.id} className="ai-item">
         <label className="inline"><input type="checkbox" checked={p.on} onChange={e => edit(p.id, { on: e.target.checked })} /> <b>{p.data || 'sem data'}</b> · {p.titulo}</label>
         {p.descricao && <small className="muted">{p.descricao}</small>}
+        {p.antesDe && evOf(p.antesDe) && <small className="muted"> · entra antes de “{evOf(p.antesDe)!.title}”</small>}
         <small className="muted"> · origem: {p.origem}{[...p.characterIds, ...p.locationIds].length > 0 && ` · ${[...p.characterIds, ...p.locationIds].map(id => byId.get(id)?.title).filter(Boolean).join(', ')}`}</small>
       </div>)}
+      {correcoes.length > 0 && <h4>Correções na linha do tempo</h4>}
+      {correcoes.map(p => { const e = evOf(p.eventId); return e && <div key={p.id} className="ai-item">
+        <label className="inline"><input type="checkbox" checked={p.on} onChange={ev => edit(p.id, { on: ev.target.checked })} /> <b>{e.title}</b></label>
+        {p.data && p.data !== e.date && <small className="muted"> Data: {e.date || 'sem data'} → <b>{p.data}</b></small>}
+        {p.descricao && p.descricao !== e.description && <div><small className="muted">Descrição nova: {p.descricao}</small></div>}
+        <small className="muted">Origem: {p.origem}{p.motivo && ` · motivo: ${p.motivo}`}</small>
+      </div> })}
     </div>
   </div>
 }

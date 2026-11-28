@@ -25,7 +25,8 @@ export function entitiesIn(nodes: BNode[], text: string) {
 
 export type Pending =
   | { id: string; kind: 'campo'; on: boolean; nodeId: string; campo: string; valor: string; motivo: string; append: boolean; origem: string }
-  | { id: string; kind: 'evento'; on: boolean; titulo: string; data: string; descricao: string; nodeIds: string[]; characterIds: string[]; locationIds: string[]; origem: string }
+  | { id: string; kind: 'evento'; on: boolean; titulo: string; data: string; descricao: string; nodeIds: string[]; characterIds: string[]; locationIds: string[]; origem: string; antesDe?: string }
+  | { id: string; kind: 'correcao'; on: boolean; eventId: string; data: string; descricao: string; motivo: string; origem: string }
 export const pendingKey = (projectId: string) => 'ia:pendentes:' + projectId
 export async function getPending(projectId: string) { return ((await db.kv.get(pendingKey(projectId)))?.value as Pending[]) || [] }
 export const setPending = (projectId: string, p: Pending[]) => db.kv.put({ key: pendingKey(projectId), value: p })
@@ -36,7 +37,8 @@ const FIELD_CHARS = 150, ENTITY_CHARS = 700, MAX_ENTITIES = 10, NAMES_CHARS = 15
 type Raw = {
   atualizacoes?: { ref: string; campo: string; valor: string; motivo: string }[]
   novos?: { tipo: string; nome: string; resumo: string; detalhes?: { campo: string; valor: string }[]; motivo: string }[]
-  eventos?: { titulo: string; data: string; descricao: string; envolvidos?: string[] }[]
+  eventos?: { titulo: string; data: string; descricao: string; envolvidos?: string[]; antes_de?: string }[]
+  correcoes?: { evento: string; data: string; descricao: string; motivo: string }[]
 }
 
 /**
@@ -50,6 +52,7 @@ export async function syncEntities(projectId: string, text: string, origem: stri
   const refs = Object.keys(ref)
   const allNames = nodes.filter(n => isEntity(nodes, n)).map(n => n.title).join(', ').slice(0, NAMES_CHARS)
   const events = (await db.events.where('projectId').equals(projectId).filter(e => !e.deleted).sortBy('sortKey')).slice(-30)
+  const evRef = Object.fromEntries(events.map((e, i) => [`T${i + 1}`, e.id])) // refs curtas para os eventos
   const prompt = `Fichas que aparecem no trecho:
 ${refs.map(r => { const n = ref[r]; const filled = textFields(templateOf(n)).filter(f => n.fields[f.key]).map(f => `${f.key}: ${n.fields[f.key].slice(0, FIELD_CHARS)}`).join('; ').slice(0, ENTITY_CHARS); return `${r}: ${n.title} [${n.kind === 'character' ? 'Personagem' : templateOf(n).name}] ficha atual: ${filled || '(vazia)'}` }).join('\n') || '(nenhuma)'}
 
@@ -58,7 +61,7 @@ Já cadastrados (NÃO crie de novo): ${allNames || '(nada)'}
 Campos de cada tipo de ficha (chave=significado):
 ${ALL_TEMPLATES.map((t, i) => `${i ? t.key : 'personagem'} (${t.name}): ${textFields(t).map(f => `${f.key}=${f.label}`).join('; ')}`).join('\n')}
 
-Eventos já na linha do tempo: ${events.map(e => `${e.date || 'sem data'}: ${e.title}`).join(' | ') || '(nenhum)'}
+Linha do tempo atual, em ordem cronológica: ${events.map((e, i) => `T${i + 1} ${e.date || 'sem data'}: ${e.title}${e.description ? ` (${e.description.slice(0, 80)})` : ''}`).join(' | ') || '(nenhum)'}
 
 Trecho:
 ${text}
@@ -67,15 +70,18 @@ ${text}
 Extraia do trecho o que deve ir para as fichas. Só fatos explícitos no texto; não invente nem deduza.
 - atualizacoes: fatos novos sobre fichas que já existem (ref E1, E2...). "campo" tem que ser do tipo daquela ficha. "valor" é só a informação nova, curta. "motivo" cita o trecho.
 - novos: personagens com nome, casas, famílias, facções, lugares, povos, objetos, criaturas e eventos históricos que têm nome próprio no trecho e ainda não estão cadastrados. Escolha o "tipo" certo (casa nobre ou família = organization; cidade, região ou construção = location). "resumo" diz em uma frase quem ou o que é. "detalhes" só com o que o trecho diz.
-- eventos: acontecimentos importantes do trecho que ainda não estão na linha do tempo; "envolvidos" usa as refs.
+- eventos: acontecimentos importantes do trecho que ainda não estão na linha do tempo; "envolvidos" usa as refs. "antes_de" é o evento (T1, T2...) que acontece DEPOIS deste na cronologia da história (flashbacks e passado vêm antes), ou "fim" se este é o mais recente.
+- correcoes: eventos da linha do tempo (T1, T2...) cuja data ou descrição o trecho contradiz ou completa. "data" e "descricao" são os valores corrigidos completos; "motivo" cita o trecho.
 - Se não houver nada, devolva listas vazias.`
   const refProp = refs.length ? { type: 'string', enum: refs } : { type: 'string' }
+  const tRefs = Object.keys(evRef)
   const schema = {
-    type: 'object', additionalProperties: false, required: ['atualizacoes', 'novos', 'eventos'],
+    type: 'object', additionalProperties: false, required: ['atualizacoes', 'novos', 'eventos', 'correcoes'],
     properties: {
       atualizacoes: { type: 'array', maxItems: 12, items: { type: 'object', additionalProperties: false, required: ['ref', 'campo', 'valor', 'motivo'], properties: { ref: refProp, campo: { type: 'string', enum: ALL_KEYS }, valor: { type: 'string' }, motivo: { type: 'string' } } } },
       novos: { type: 'array', maxItems: 8, items: { type: 'object', additionalProperties: false, required: ['tipo', 'nome', 'resumo', 'detalhes', 'motivo'], properties: { tipo: { type: 'string', enum: TYPES }, nome: { type: 'string' }, resumo: { type: 'string' }, detalhes: { type: 'array', maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['campo', 'valor'], properties: { campo: { type: 'string', enum: ALL_KEYS }, valor: { type: 'string' } } } }, motivo: { type: 'string' } } } },
-      eventos: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['titulo', 'data', 'descricao', 'envolvidos'], properties: { titulo: { type: 'string' }, data: { type: 'string' }, descricao: { type: 'string' }, envolvidos: { type: 'array', items: refProp } } } }
+      eventos: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['titulo', 'data', 'descricao', 'envolvidos', 'antes_de'], properties: { titulo: { type: 'string' }, data: { type: 'string' }, descricao: { type: 'string' }, envolvidos: { type: 'array', items: refProp }, antes_de: { type: 'string', enum: [...tRefs, 'fim'] } } } },
+      correcoes: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, required: ['evento', 'data', 'descricao', 'motivo'], properties: { evento: tRefs.length ? { type: 'string', enum: tRefs } : { type: 'string' }, data: { type: 'string' }, descricao: { type: 'string' }, motivo: { type: 'string' } } } }
     }
   }
   let out = ''
@@ -84,11 +90,11 @@ Extraia do trecho o que deve ir para as fichas. Só fatos explícitos no texto; 
     { role: 'system', content: 'Você é um assistente de continuidade para um romancista. Extrai fatos de ficção (inclusive adulta e sombria) sem julgamentos morais e responde só em JSON.' },
     { role: 'user', content: prompt }
   ], t => { out += t }, { signal, temperature: 0.3, maxTokens: 1500, schema })
-  return applyExtraction(projectId, extractJSON<Raw>(out), ref, origem, sceneIds)
+  return applyExtraction(projectId, extractJSON<Raw>(out), ref, origem, sceneIds, evRef)
 }
 
 /** Grava o que é seguro e enfileira o resto. Valida tudo o que veio do modelo. Exportada para teste. */
-export async function applyExtraction(projectId: string, r: Raw, ref: Record<string, BNode>, origem: string, sceneIds: string[]) {
+export async function applyExtraction(projectId: string, r: Raw, ref: Record<string, BNode>, origem: string, sceneIds: string[], evRef: Record<string, string> = {}) {
   const log: string[] = [], conflicts: string[] = [], pending = await getPending(projectId)
   const nodes = await db.nodes.where('projectId').equals(projectId).toArray() // relê: não sobrescreve edições recentes
   const known = new Set(nodes.filter(n => isEntity(nodes, n)).flatMap(entityNames).map(s => s.toLowerCase()))
@@ -121,10 +127,10 @@ export async function applyExtraction(projectId: string, r: Raw, ref: Record<str
     const f = fieldOf(n, u.campo)!
     if (!old) { fields[u.campo] = valor; touched.set(n.id, fields); log.push(`${n.title} · ${f.label}: ${valor}`); continue }
     if (old.toLowerCase().includes(valor.toLowerCase())) continue
-    const isLong = f.type === 'long'
-    if (!isLong) conflicts.push(`Ficha de ${n.title} diz "${f.label}: ${old}", mas o texto indica "${valor}" (${u.motivo || origem}).`)
+    if (f.type === 'long') { fields[u.campo] = `${old}\n\n${valor}`; touched.set(n.id, fields); log.push(`${n.title} · ${f.label} (acrescentado): ${valor}`); continue } // texto longo: informação nova só soma
+    conflicts.push(`Ficha de ${n.title} diz "${f.label}: ${old}", mas o texto indica "${valor}" (${u.motivo || origem}).`)
     if (pending.some(p => p.kind === 'campo' && p.nodeId === n.id && p.campo === u.campo && p.valor.toLowerCase() === valor.toLowerCase())) continue // já na fila
-    pending.push({ id: uid(), kind: 'campo', on: true, nodeId: n.id, campo: u.campo, valor, motivo: u.motivo || '', append: isLong, origem })
+    pending.push({ id: uid(), kind: 'campo', on: true, nodeId: n.id, campo: u.campo, valor, motivo: u.motivo || '', append: false, origem })
   }
   for (const [id, fields] of touched) await db.nodes.update(id, { fields, updatedAt: now() })
 
@@ -133,7 +139,12 @@ export async function applyExtraction(projectId: string, r: Raw, ref: Record<str
     if (!e.titulo?.trim() || seen.has(e.titulo.trim().toLowerCase())) continue // já na fila ou na linha do tempo
     seen.add(e.titulo.trim().toLowerCase())
     const inv = (e.envolvidos || []).map(x => ref[x]).filter(Boolean)
-    pending.push({ id: uid(), kind: 'evento', on: true, titulo: e.titulo.trim(), data: e.data?.trim() || '', descricao: e.descricao?.trim() || '', nodeIds: sceneIds, characterIds: inv.filter(n => n.kind === 'character').map(n => n.id), locationIds: inv.filter(n => n.kind === 'world').map(n => n.id), origem })
+    pending.push({ id: uid(), kind: 'evento', on: true, titulo: e.titulo.trim(), data: e.data?.trim() || '', descricao: e.descricao?.trim() || '', nodeIds: sceneIds, characterIds: inv.filter(n => n.kind === 'character').map(n => n.id), locationIds: inv.filter(n => n.kind === 'world').map(n => n.id), origem, antesDe: evRef[e.antes_de || ''] })
+  }
+  for (const c of r.correcoes || []) {
+    const eventId = evRef[c.evento]
+    if (!eventId || (!c.data?.trim() && !c.descricao?.trim())) continue
+    pending.push({ id: uid(), kind: 'correcao', on: true, eventId, data: c.data?.trim() || '', descricao: c.descricao?.trim() || '', motivo: c.motivo || '', origem })
   }
   await setPending(projectId, pending)
   return { log, conflicts }
@@ -151,9 +162,17 @@ export async function applyPending(projectId: string) {
       const old = (n.fields[p.campo] || '').trim()
       await db.nodes.update(n.id, { fields: { ...n.fields, [p.campo]: p.append && old ? `${old}\n\n${p.valor.trim()}` : p.valor.trim() }, updatedAt: now() })
       fieldsN++
+    } else if (p.kind === 'correcao') {
+      const e = await db.events.get(p.eventId)
+      if (!e || e.deleted) continue
+      await db.events.update(e.id, { ...(p.data && { date: p.data }), ...(p.descricao && { description: p.descricao }), updatedAt: now() })
+      eventsN++
     } else {
-      const last = (await db.events.where('projectId').equals(projectId).filter(e => !e.deleted).sortBy('sortKey')).at(-1)?.sortKey ?? 0
-      await db.events.add({ id: uid(), projectId, title: p.titulo, date: p.data, sortKey: last + 10, description: p.descricao, color: '#2980b9', nodeIds: p.nodeIds, characterIds: p.characterIds, locationIds: p.locationIds, updatedAt: now() })
+      const evs = await db.events.where('projectId').equals(projectId).filter(e => !e.deleted).sortBy('sortKey')
+      const i = evs.findIndex(e => e.id === p.antesDe)
+      // entra no lugar cronológico: entre o anterior e o evento que vem depois; sem posição, vai para o fim
+      const sortKey = i < 0 ? (evs.at(-1)?.sortKey ?? 0) + 10 : i === 0 ? evs[0].sortKey - 10 : (evs[i - 1].sortKey + evs[i].sortKey) / 2
+      await db.events.add({ id: uid(), projectId, title: p.titulo, date: p.data, sortKey, description: p.descricao, color: '#2980b9', nodeIds: p.nodeIds, characterIds: p.characterIds, locationIds: p.locationIds, updatedAt: now() })
       eventsN++
     }
   }

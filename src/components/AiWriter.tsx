@@ -71,9 +71,10 @@ export default function AiWriter() {
     setMsgs([...history, { role: 'assistant', content: '' }]); setInput(''); setError(''); setBusy(true)
     abort.current = new AbortController()
     try {
-      const { title, genre, settings: { aiRules } } = ws.project
+      const { title, genre, settings: { aiRules, aiGenre } } = ws.project
       // regras do autor por último: têm prioridade sobre as do modo (ex.: humanizar)
       const system = `${DEFAULT_SYSTEM_PROMPT}\n\nLivro: "${title}"${genre ? `, gênero: ${genre}` : ''}.\n\n${MODES[mode].prompt}` +
+        (aiGenre?.trim() ? `\n\nConvenções do gênero deste livro (são intencionais, não aponte como erro nem suavize):\n${aiGenre.trim()}` : '') +
         (aiRules?.trim() ? `\n\nRegras do autor para este livro. Siga sempre; elas têm prioridade sobre as instruções acima:\n${aiRules.trim()}` : '') +
         voices(history[0].content)
       await streamChat([{ role: 'system', content: system }, ...trimHistory(history, TOTAL_CHARS - system.length)],

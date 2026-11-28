@@ -18,6 +18,7 @@ export interface ProjectSettings {
   codex?: boolean
   /** Regras de escrita do autor, enviadas à IA em toda conversa deste livro. */
   aiRules?: string
+  aiGenre?: string // convenções do gênero que a IA deve respeitar ao avaliar
 }
 
 export interface Project {
